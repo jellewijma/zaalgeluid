@@ -2,6 +2,70 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+.player-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.account-panel {
+  border-top: 1px solid var(--border);
+  padding-top: 18px;
+}
+.account-heading,
+.account-heading > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.account-heading {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.account-panel summary {
+  cursor: pointer;
+  font-size: 12px;
+  margin-top: 12px;
+  padding-block: 6px;
+}
+.account-panel summary:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 4px;
+}
+.account-field {
+  margin-block: 18px;
+}
+.account-panel label {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+.account-help,
+.pairing-expiry {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted-foreground);
+}
+.account-help {
+  margin-top: 12px;
+}
+.pairing-expiry {
+  text-align: center;
+  margin-top: 12px;
+}
+.pairing-expiry button {
+  margin-top: 4px;
+}
+.revoke-controllers {
+  width: 100%;
+  margin-top: 12px;
+}
+.account-notice {
+  color: var(--primary) !important;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -1398,6 +1462,45 @@ p {
     flex-shrink: 0;
     margin-top: 2px;
   }
+}
+.library-switcher {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 20px 16px;
+}
+.library-switcher .queue-clear { margin-left: auto; }
+.queue-toggle[aria-pressed="true"] { color: var(--primary); }
+.playlist-transport {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 14px;
+}
+.playlist-transport > span { text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; }
+.playlist-transport small { display: block; margin-top: 3px; font-size: 10px; color: var(--muted-foreground); }
+.effect-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 24px 20px;
+  flex-wrap: wrap;
+}
+.effect-current { display: flex; gap: 8px; align-items: center; flex: 1; min-width: 160px; font-size: 12px; }
+.effect-current > span { overflow-wrap: anywhere; }
+.effect-current > svg { flex-shrink: 0; color: var(--primary); }
+.effect-volume { width: 100%; }
+.effect-volume label { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted-foreground); margin-bottom: 8px; }
+.effect-volume [data-slot="slider"] { min-height: 32px; }
+.library-error { overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .library-switcher { padding-inline: 12px; }
+  .effect-controls { padding-inline: 17px; }
+  .queue-toggle { flex-shrink: 0; min-width: 44px; min-height: 44px; }
+  .playlist-transport { flex-wrap: wrap; }
+  .playlist-transport small { max-width: 130px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *,

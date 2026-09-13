@@ -16,5 +16,5 @@
     "types": ["node", "vite/client"],
     "paths": { "@/*": ["./src/*"] }
   },
-  "include": ["src", "shared", "server", "tests", "*.ts"]
+  "include": ["src", "shared", "server", "tests", "cloud-tests", "convex-tests", "*.ts"]
 }

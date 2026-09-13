@@ -4,6 +4,7 @@ export interface Track {
   filename: string;
   size: number;
   createdAt: string;
+  kind?: "music" | "effect";
 }
 
 export type PlaybackStatus =
@@ -16,6 +17,11 @@ export interface Playback {
   volume: number;
   ready: boolean;
   error: string | null;
+  queue: string[];
+  effectTrackId: string | null;
+  effectStatus: PlaybackStatus;
+  effectVolume: number;
+  effectError: string | null;
 }
 export interface RoomState {
   tracks: Track[];
@@ -25,6 +31,10 @@ export interface RoomState {
 }
 export type Command =
   | { action: "select"; trackId: string }
+  | { action: "queue-add" | "queue-remove"; trackId: string }
+  | { action: "queue-clear" | "next" | "previous" | "effect-stop" }
+  | { action: "effect-play"; trackId: string }
+  | { action: "effect-volume"; value: number }
   | { action: "play" | "pause" | "stop" | "restart" | "clear" }
   | { action: "volume"; value: number }
   | { action: "seek"; value: number };
@@ -50,4 +60,9 @@ export const initialPlayback: Playback = {
   volume: 0.75,
   ready: false,
   error: null,
+  queue: [],
+  effectTrackId: null,
+  effectStatus: "idle",
+  effectVolume: 0.75,
+  effectError: null,
 };

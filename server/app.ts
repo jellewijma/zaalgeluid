@@ -8,6 +8,7 @@ import { existsSync } from 'node:fs'
 import { networkInterfaces } from 'node:os'
 import path from 'node:path'
 import type { AddressInfo } from 'node:net'
+import { normalizeBasePath, withBasePath } from '../shared/paths.js'
 import { initialPlayback, type Command, type Playback, type RoomState, type ServerMessage, type Track } from '../shared/protocol.js'
 
 const SESSION_MS = 12 * 60 * 60 * 1000
@@ -16,10 +17,10 @@ const STATUSES = new Set(['idle', 'loading', 'playing', 'paused', 'stopped', 'en
 type StoredTrack = Track & { storedFilename: string }
 type Role = 'player' | 'controller'
 type Peer = { role: Role; alive: boolean; expiresAt: number }
-export interface ServerOptions { dataDir?: string; port?: number; host?: string; dev?: boolean }
+export interface ServerOptions { dataDir?: string; port?: number; host?: string; dev?: boolean; basePath?: string }
 
-function publicTrack({ id, name, filename, size, createdAt }: StoredTrack): Track {
-  return { id, name, filename, size, createdAt }
+function publicTrack({ id, name, filename, size, createdAt, kind }: StoredTrack): Track {
+  return { id, name, filename, size, createdAt, kind: kind ?? 'music' }
 }
 function isLoopback(address: string | undefined) {
   return address === '::1' || address === '127.0.0.1' || address?.startsWith('::ffff:127.') || address?.startsWith('127.')
@@ -48,6 +49,8 @@ function localAddresses() {
 }
 
 export async function createAppServer(options: ServerOptions = {}) {
+  const basePath = normalizeBasePath(options.basePath)
+  const at = (route: string) => withBasePath(basePath, route)
   const dataDir = path.resolve(options.dataDir ?? path.join(process.cwd(), 'data'))
   const audioDir = path.join(dataDir, 'audio')
   const manifestPath = path.join(dataDir, 'library.json')
@@ -71,6 +74,7 @@ export async function createAppServer(options: ServerOptions = {}) {
       && path.basename(item.storedFilename) === item.storedFilename && !item.storedFilename.includes('\\')
       && /^[0-9a-f-]{36}\.[a-z0-9]+$/.test(item.storedFilename)
       && AUDIO_EXTENSIONS.has(path.extname(item.storedFilename)) && finiteRange(item.size, 0, 500 * 1024 * 1024)
+      && (item.kind === undefined || item.kind === 'music' || item.kind === 'effect')
       && typeof item.createdAt === 'string')) throw new Error('Ongeldige audiobibliotheek in data/library.json. De bestaande bestanden zijn behouden.')
     library = parsed
   } catch (error) {
@@ -95,6 +99,8 @@ export async function createAppServer(options: ServerOptions = {}) {
   const peers = new Map<WebSocket, Peer>()
   let activePlayer: WebSocket | null = null
   let pendingTrackId: string | null = null
+  const pendingQueueIds = new Set<string>()
+  let pendingEffectId: string | null = null
   const deletingTrackIds = new Set<string>()
   let playback: Playback = { ...initialPlayback }
   const app = express()
@@ -156,15 +162,20 @@ export async function createAppServer(options: ServerOptions = {}) {
     if (!validHost(request) || !validOrigin(request)) return response.status(403).json({ error: 'Dit verzoek komt niet van deze lokale app.' })
     next()
   })
-  app.use('/api', (_request, response, next) => { response.setHeader('Cache-Control', 'no-store'); next() })
+  if (basePath !== '/') app.get(basePath.slice(0, -1), (request, response, next) => {
+    if (request.path !== basePath.slice(0, -1)) { next(); return }
+    const query = request.originalUrl.includes('?') ? request.originalUrl.slice(request.originalUrl.indexOf('?')) : ''
+    response.redirect(308, basePath + query)
+  })
+  app.use(at('/api'), (_request, response, next) => { response.setHeader('Cache-Control', 'no-store'); next() })
   app.use(express.json({ limit: '16kb' }))
-  app.get('/api/setup', (request, response) => {
+  app.get(at('/api/setup'), (request, response) => {
     if (!isLoopback(request.socket.remoteAddress)) return response.status(403).json({ error: 'Open deze pagina op de afspeelcomputer via localhost.' })
     const port = (server.address() as AddressInfo | null)?.port ?? options.port ?? 3000
-    const urls = [...new Set(localAddresses().filter((entry) => entry.family === 'IPv4').map((entry) => `http://${entry.address}:${port}/control`))]
+    const urls = [...new Set(localAddresses().filter((entry) => entry.family === 'IPv4').map((entry) => `http://${entry.address}:${port}${at('/control')}`))]
     response.json({ pin, token: playerToken, urls })
   })
-  app.post('/api/pair', (request, response) => {
+  app.post(at('/api/pair'), (request, response) => {
     const ip = request.socket.remoteAddress ?? 'unknown'
     const previous = failedPairings.get(ip)
     if (previous && previous.until > Date.now() && previous.count >= 8) {
@@ -182,7 +193,7 @@ export async function createAppServer(options: ServerOptions = {}) {
     sessions.set(token, Date.now() + SESSION_MS)
     response.json({ token })
   })
-  app.get('/api/tracks', authorized, (_request, response) => response.json(library.map(publicTrack)))
+  app.get(at('/api/tracks'), authorized, (_request, response) => response.json(library.map(publicTrack)))
   const upload = multer({
     storage: multer.diskStorage({ destination: audioDir, filename: (_request, file, callback) => callback(null, `${randomUUID()}${path.extname(file.originalname).toLowerCase()}`) }),
     limits: { fileSize: 500 * 1024 * 1024, files: 50, fields: 0 },
@@ -191,7 +202,9 @@ export async function createAppServer(options: ServerOptions = {}) {
       callback(null, true)
     },
   }).array('files', 50)
-  app.post('/api/tracks', localPlayer, (request, response, next) => {
+  app.post(at('/api/tracks'), localPlayer, (request, response, next) => {
+    const kind = request.query.kind ?? 'music'
+    if (kind !== 'music' && kind !== 'effect') return response.status(400).json({ error: 'Kies liedjes of geluidseffecten.' })
     upload(request, response, (error: unknown) => {
       if (error) return next(error)
       const files = (request.files ?? []) as Express.Multer.File[]
@@ -200,7 +213,7 @@ export async function createAppServer(options: ServerOptions = {}) {
         const tracks: StoredTrack[] = files.map((file) => {
           const filename = displayFilename(file.originalname)
           return { id: path.parse(file.filename).name, name: path.parse(filename).name, filename,
-            storedFilename: file.filename, size: file.size, createdAt: new Date().toISOString() }
+            storedFilename: file.filename, size: file.size, createdAt: new Date().toISOString(), kind }
         })
         try { await saveLibrary([...library, ...tracks]) }
         catch (saveError) { await Promise.allSettled(files.map((file) => unlink(file.path))); throw saveError }
@@ -209,11 +222,13 @@ export async function createAppServer(options: ServerOptions = {}) {
       }).catch(next)
     })
   })
-  app.delete('/api/tracks/:id', localPlayer, (request, response, next) => {
+  app.delete(at('/api/tracks/:id'), localPlayer, (request, response, next) => {
     void mutate(async () => {
       const track = library.find((item) => item.id === request.params.id)
       if (!track) return response.status(404).json({ error: 'Dit audiofragment bestaat niet meer.' })
       if (playback.trackId === track.id || pendingTrackId === track.id) return response.status(409).json({ error: 'Selecteer eerst een ander fragment voordat je dit verwijdert.' })
+      if (playback.queue.includes(track.id) || pendingQueueIds.has(track.id)) return response.status(409).json({ error: 'Haal dit liedje eerst uit de afspeellijst.' })
+      if (playback.effectTrackId === track.id || pendingEffectId === track.id) return response.status(409).json({ error: 'Stop eerst het geluidseffect voordat je dit verwijdert.' })
       deletingTrackIds.add(track.id)
       try { await saveLibrary(library.filter((item) => item.id !== track.id)) }
       finally { deletingTrackIds.delete(track.id) }
@@ -222,19 +237,25 @@ export async function createAppServer(options: ServerOptions = {}) {
       response.status(204).end()
     }).catch(next)
   })
-  app.get('/api/audio/:id', (request, response) => {
+  app.get(at('/api/audio/:id'), (request, response) => {
     const token = typeof request.query.token === 'string' ? request.query.token : bearer(request)
     if (roleForToken(token) !== 'player') return response.status(401).json({ error: 'Alleen de afspeler kan audio ophalen.' })
     const track = library.find((item) => item.id === request.params.id)
     if (!track) return response.status(404).json({ error: 'Dit audiofragment bestaat niet meer.' })
     response.sendFile(path.join(audioDir, track.storedFilename), { acceptRanges: true, cacheControl: false })
   })
-  app.use('/api', (_request, response) => response.status(404).json({ error: 'Onbekend verzoek.' }))
+  app.use(at('/api'), (_request, response) => response.status(404).json({ error: 'Onbekend verzoek.' }))
 
   function validPlayback(value: unknown): value is Playback {
     if (!value || typeof value !== 'object') return false
     const next = value as Playback
-    return (next.trackId === null || (typeof next.trackId === 'string' && library.some((track) => track.id === next.trackId)))
+    return (next.trackId === null || (typeof next.trackId === 'string' && library.some((track) => track.id === next.trackId && track.kind !== 'effect')))
+      && Array.isArray(next.queue) && next.queue.length <= 200 && new Set(next.queue).size === next.queue.length
+      && next.queue.every((id) => typeof id === 'string' && library.some((track) => track.id === id && track.kind !== 'effect'))
+      && (next.effectTrackId === null || (typeof next.effectTrackId === 'string' && library.some((track) => track.id === next.effectTrackId && track.kind === 'effect')))
+      && STATUSES.has(next.effectStatus) && finiteRange(next.effectVolume, 0, 1)
+      && (next.effectError === null || (typeof next.effectError === 'string' && next.effectError.length <= 1000))
+      && (next.effectStatus !== 'playing' || next.effectTrackId !== null)
       && STATUSES.has(next.status) && finiteRange(next.currentTime, 0, 7 * 24 * 3600)
       && finiteRange(next.duration, 0, 7 * 24 * 3600) && next.currentTime <= next.duration + 1
       && finiteRange(next.volume, 0, 1) && typeof next.ready === 'boolean'
@@ -244,7 +265,15 @@ export async function createAppServer(options: ServerOptions = {}) {
   function parseCommand(value: unknown): Command | null {
     if (!value || typeof value !== 'object') return null
     const input = value as Record<string, unknown>
-    if (input.action === 'select' && typeof input.trackId === 'string' && !deletingTrackIds.has(input.trackId) && library.some((track) => track.id === input.trackId)) return { action: 'select', trackId: input.trackId }
+    if ((input.action === 'select' || input.action === 'queue-add' || input.action === 'queue-remove' || input.action === 'effect-play')
+      && typeof input.trackId === 'string' && !deletingTrackIds.has(input.trackId)
+      && library.some((track) => track.id === input.trackId && (input.action === 'effect-play' ? track.kind === 'effect' : track.kind !== 'effect'))) {
+      if (input.action === 'queue-add' && !playback.queue.includes(input.trackId)
+        && new Set([...playback.queue, ...pendingQueueIds]).size >= 200) return null
+      return { action: input.action, trackId: input.trackId }
+    }
+    if (input.action === 'effect-volume' && finiteRange(input.value, 0, 1)) return { action: 'effect-volume', value: input.value }
+    if (input.action === 'effect-stop' || input.action === 'queue-clear' || input.action === 'next' || input.action === 'previous') return { action: input.action }
     if (input.action === 'volume' && finiteRange(input.value, 0, 1)) return { action: 'volume', value: input.value }
     if (input.action === 'seek' && finiteRange(input.value, 0, playback.duration)) return { action: 'seek', value: input.value }
     if (input.action === 'play' || input.action === 'pause' || input.action === 'stop' || input.action === 'restart' || input.action === 'clear') return { action: input.action }
@@ -254,7 +283,7 @@ export async function createAppServer(options: ServerOptions = {}) {
     let url: URL
     try { url = new URL(request.url ?? '/', 'http://localhost') } catch { socket.destroy(); return }
     // Vite owns its own HMR websocket in development.
-    if (url.pathname !== '/ws') { if (!options.dev) socket.destroy(); return }
+    if (url.pathname !== at('/ws')) { if (!options.dev) socket.destroy(); return }
     const token = url.searchParams.get('token') ?? undefined
     const role = roleForToken(token)
     if (!validHost(request) || !validOrigin(request) || !role) {
@@ -287,21 +316,28 @@ export async function createAppServer(options: ServerOptions = {}) {
           if (!validPlayback(message.playback)) { fail(webSocket, 'Ongeldige afspeelstatus.', 'INVALID_PLAYBACK'); return }
           const next = message.playback
           playback = { trackId: next.trackId, status: next.status, currentTime: next.currentTime,
-            duration: next.duration, volume: next.volume, ready: next.ready, error: next.error }
+            duration: next.duration, volume: next.volume, ready: next.ready, error: next.error,
+            queue: [...next.queue], effectTrackId: next.effectTrackId, effectStatus: next.effectStatus,
+            effectVolume: next.effectVolume, effectError: next.effectError }
           if (pendingTrackId === next.trackId || next.status === 'error') pendingTrackId = null
+          for (const id of pendingQueueIds) if (next.queue.includes(id)) pendingQueueIds.delete(id)
+          if (pendingEffectId === next.effectTrackId || next.effectStatus === 'error' || !next.ready) pendingEffectId = null
           broadcast()
           return
         }
         if (message.type === 'command') {
           const command = parseCommand(message.command)
           if (!command) { fail(webSocket, 'Ongeldige bediening of onbekend fragment.', 'INVALID_COMMAND'); return }
-          if (!activePlayer || activePlayer.readyState !== WebSocket.OPEN || !playback.ready) {
+          if (!activePlayer || activePlayer.readyState !== WebSocket.OPEN
+            || (!playback.ready && command.action !== 'stop' && command.action !== 'effect-stop')) {
             fail(webSocket, 'De afspeler is niet gereed. Activeer audio op de afspeelcomputer.', 'PLAYER_NOT_READY'); return
           }
-          if (command.action !== 'select' && command.action !== 'volume' && command.action !== 'clear' && !playback.trackId && !pendingTrackId) {
+          if (['play', 'pause', 'restart', 'seek'].includes(command.action) && !playback.trackId && !pendingTrackId && !pendingQueueIds.size) {
             fail(webSocket, 'Selecteer eerst een audiofragment.', 'NO_TRACK'); return
           }
           if (command.action === 'select') pendingTrackId = command.trackId
+          if (command.action === 'queue-add') pendingQueueIds.add(command.trackId)
+          if (command.action === 'effect-play') pendingEffectId = command.trackId
           if (command.action === 'clear') pendingTrackId = null
           send(activePlayer, { type: 'command', id: randomUUID(), command })
           return
@@ -313,7 +349,10 @@ export async function createAppServer(options: ServerOptions = {}) {
         if (activePlayer === webSocket) {
           activePlayer = null
           pendingTrackId = null
-          playback = { ...playback, ready: false, status: 'stopped', currentTime: 0, error: null }
+          pendingQueueIds.clear()
+          pendingEffectId = null
+          playback = { ...playback, ready: false, status: 'stopped', currentTime: 0, error: null,
+            effectTrackId: null, effectStatus: 'idle', effectError: null }
         }
         broadcast()
       })
@@ -337,8 +376,10 @@ export async function createAppServer(options: ServerOptions = {}) {
   if (options.dev) {
     const { createServer: createViteServer } = await import('vite')
     const devServer = await createViteServer({
+      base: basePath,
       server: {
         middlewareMode: true, hmr: { server },
+        watch: { ignored: ['**/.checks/**', '**/test-results/**', '**/playwright-report/**', `${dataDir.replaceAll('\\', '/')}/**`] },
         // Vite's root also contains the local library. Protect direct URLs, @fs,
         // and ?raw imports so development mode cannot bypass the authenticated API.
         fs: { deny: ['.env', '.env.*', '*.{crt,pem,key,p12,pfx,cer,der}', '.npmrc', '.yarnrc.yml', '**/.git/**', `${dataDir.replaceAll('\\', '/')}/**`] },
@@ -349,8 +390,8 @@ export async function createAppServer(options: ServerOptions = {}) {
     app.use(devServer.middlewares)
   } else {
     const distDir = path.resolve(process.cwd(), 'dist')
-    app.use(express.static(distDir))
-    app.get('/{*path}', (_request, response) => {
+    app.use(basePath === '/' ? '/' : basePath.slice(0, -1), express.static(distDir))
+    app.get(at('/{*path}'), (_request, response) => {
       if (!existsSync(path.join(distDir, 'index.html'))) return response.status(503).send('Bouw de app eerst met npm run build, of start npm run dev.')
       response.sendFile(path.join(distDir, 'index.html'))
     })
@@ -374,7 +415,7 @@ export async function createAppServer(options: ServerOptions = {}) {
         server.listen(options.port ?? 3000, options.host ?? '0.0.0.0', () => { server.off('error', reject); resolve() })
       })
       const address = server.address() as AddressInfo
-      return { port: address.port, url: `http://localhost:${address.port}` }
+      return { port: address.port, url: `http://localhost:${address.port}${basePath === '/' ? '' : basePath.slice(0, -1)}` }
     },
     async close() {
       clearInterval(heartbeat)

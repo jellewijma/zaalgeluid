@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type ReactNode,
 } from "react";
 import {
   AudioLines,
@@ -13,20 +14,19 @@ import {
   ChevronRight,
   CircleHelp,
   Copy,
-  FileAudio2,
   Headphones,
   Link2,
   LoaderCircle,
   Monitor,
   Pause,
   Play,
-  Plus,
   Radio,
   RotateCcw,
   ShieldCheck,
   Smartphone,
   Square,
-  Trash2,
+  SkipBack,
+  SkipForward,
   Volume1,
   Volume2,
   VolumeX,
@@ -38,9 +38,12 @@ import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
-import { useRoom } from "@/hooks/use-room";
-import { cn, formatSize, formatTime } from "@/lib/utils";
-import type { Command, Playback, Setup, Track } from "../shared/protocol";
+import { useRoom, type Connection } from "@/hooks/use-room";
+import { TabletController } from "@/components/tablet-controller";
+import { AudioLibrary } from "@/components/audio-library";
+import { appPath, appRoute } from "@/lib/paths";
+import { cn, formatTime } from "@/lib/utils";
+import type { Command, Playback, RoomState, Setup, Track } from "../shared/protocol";
 
 const labels: Record<Playback["status"], string> = {
   idle: "Klaar voor een fragment",
@@ -51,14 +54,14 @@ const labels: Record<Playback["status"], string> = {
   ended: "Afgelopen",
   error: "Audio controleren",
 };
-const isPlayer = location.pathname === "/player";
-const isControl = location.pathname === "/control";
+const isPlayer = appRoute() === "/player";
+const isControl = appRoute() === "/control";
 
-function Header({ connected, role }: { connected?: boolean; role?: string }) {
+export function Header({ connected, role, cloud = false }: { connected?: boolean; role?: string; cloud?: boolean }) {
   return (
     <header className="app-header">
       <div className="header-inner">
-        <a href="/" className="brand" aria-label="Zaalgeluid startpagina">
+        <a href={appPath("/")} className="brand" aria-label="Zaalgeluid startpagina">
           <span className="brand-icon">
             <AudioLines size={23} />
           </span>
@@ -69,7 +72,7 @@ function Header({ connected, role }: { connected?: boolean; role?: string }) {
         </a>
         <div className="header-meta">
           <span className="local-label">
-            <ShieldCheck size={15} /> Lokaal netwerk
+            <ShieldCheck size={15} /> {cloud ? "Privé verbonden" : "Lokaal netwerk"}
           </span>
           {role && (
             <span className={cn("connection-tag", connected && "is-connected")}>
@@ -83,10 +86,10 @@ function Header({ connected, role }: { connected?: boolean; role?: string }) {
   );
 }
 
-function Home() {
+export function Home({ cloud = false }: { cloud?: boolean }) {
   return (
     <>
-      <Header />
+      <Header cloud={cloud} />
       <main className="welcome page-width">
         <div className="eyebrow">VANAF DE ZAAL, RECHTSTREEKS NAAR DE PA</div>
         <h1>
@@ -95,12 +98,12 @@ function Home() {
           Op jouw moment.
         </h1>
         <p className="lead">
-          Je pc speelt af. Jij bedient vanaf je tablet.
+          {cloud ? "Open de afspeler op de pc en bedien vanaf je tablet." : "Je pc speelt af. Jij bedient vanaf je tablet."}
           <br />
-          Alles blijft op je eigen netwerk.
+          {cloud ? "Jouw liedjes en effecten, altijd bij de hand." : "Alles blijft op je eigen netwerk."}
         </p>
         <div className="role-options">
-          <a className="role-option" href="/player">
+          <a className="role-option" href={appPath("/player")}>
             <span className="role-icon">
               <Monitor />
             </span>
@@ -116,7 +119,7 @@ function Home() {
               Afspeler openen <ChevronRight size={18} />
             </span>
           </a>
-          <a className="role-option" href="/control">
+          <a className="role-option" href={appPath("/control")}>
             <span className="role-icon">
               <Smartphone />
             </span>
@@ -134,7 +137,7 @@ function Home() {
           </a>
         </div>
         <p className="welcome-note">
-          <Link2 size={17} /> Verbind beide apparaten met hetzelfde netwerk.
+          <Link2 size={17} /> {cloud ? "Meld je aan op de pc. Koppel je tablet met de code op het scherm." : "Verbind beide apparaten met hetzelfde netwerk."}
         </p>
       </main>
       <Footer />
@@ -142,7 +145,7 @@ function Home() {
   );
 }
 
-function Footer() {
+export function Footer() {
   return (
     <footer className="footer page-width">
       <span>
@@ -172,12 +175,12 @@ function Pairing({ onPaired }: { onPaired: (token: string) => void }) {
     setBusy(true);
     setError("");
     try {
-      const data = await fetch("/api/pair", {
+      const data = await fetch(appPath("/api/pair"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pin }),
       }).then(responseData<{ token: string }>);
-      sessionStorage.setItem("zaalgeluid-controller", data.token);
+      sessionStorage.setItem(appPath("zaalgeluid-controller"), data.token);
       onPaired(data.token);
     } catch (cause) {
       setError(
@@ -191,7 +194,7 @@ function Pairing({ onPaired }: { onPaired: (token: string) => void }) {
     <>
       <Header role="Bediening" />
       <main className="pairing-page">
-        <a href="/" className="back-link">
+        <a href={appPath("/")} className="back-link">
           <ArrowLeft size={16} /> Terug
         </a>
         <div className="pairing-icon">
@@ -248,13 +251,13 @@ export default function App() {
   const [setup, setSetup] = useState<Setup | null>(null);
   const [setupError, setSetupError] = useState("");
   const [controllerToken, setControllerToken] = useState(() =>
-    sessionStorage.getItem("zaalgeluid-controller"),
+    sessionStorage.getItem(appPath("zaalgeluid-controller")),
   );
   const [generation, setGeneration] = useState(0);
   useEffect(() => {
     if (!isPlayer) return;
     let cancelled = false;
-    fetch("/api/setup", { signal: AbortSignal.timeout(5000) })
+    fetch(appPath("/api/setup"), { signal: AbortSignal.timeout(5000) })
       .then(responseData<Setup>)
       .then((value) => {
         if (!cancelled) {
@@ -279,7 +282,7 @@ export default function App() {
       setSetup(null);
       setGeneration((value) => value + 1);
     } else {
-      sessionStorage.removeItem("zaalgeluid-controller");
+      sessionStorage.removeItem(appPath("zaalgeluid-controller"));
       setControllerToken(null);
     }
   }, []);
@@ -302,8 +305,8 @@ export default function App() {
             <>
               <p>
                 Gebruik op de PA-pc{" "}
-                <a href={`http://localhost:${location.port || "3000"}/player`}>
-                  localhost:{location.port || "3000"}/player
+                <a href={`http://localhost:${location.port || "3000"}${appPath('/player')}`}>
+                  localhost:{location.port || "3000"}{appPath('/player')}
                 </a>
                 .
               </p>
@@ -313,7 +316,7 @@ export default function App() {
               >
                 Opnieuw proberen
               </Button>
-              <a className="back-link" href="/control">
+              <a className="back-link" href={appPath("/control")}>
                 Naar de bediening <ChevronRight size={16} />
               </a>
             </>
@@ -345,7 +348,46 @@ function Session({
     isPlayer ? "player" : "controller",
     onInvalidSession,
   );
+  if (!isPlayer) {
+    return (
+      <TabletController
+        state={state}
+        connection={connection}
+        command={command}
+        error={error}
+        clearError={clearError}
+        onDisconnect={onInvalidSession}
+      />
+    );
+  }
+  return <PlayerConsole {...{ state, connection, command, enable, error, clearError, token, setup }} />;
+}
+
+interface PlayerConsoleProps {
+  state: RoomState;
+  connection: Connection;
+  command: (command: Command) => void;
+  enable: () => Promise<void>;
+  error: string | null;
+  clearError: () => void;
+  token: string;
+  setup: (Setup & { pinExpiresAt?: number }) | null;
+  cloud?: boolean;
+  takeover?: () => Promise<void>;
+  refreshPin?: () => Promise<void>;
+  revokeControllers?: () => Promise<void>;
+  account?: ReactNode;
+  onUpload?: (files: File[], kind: "music" | "effect") => Promise<void>;
+  onRemove?: (id: string) => Promise<void>;
+}
+
+export function PlayerConsole({
+  state, connection, command, enable, error, clearError, token, setup,
+  cloud = false, takeover, refreshPin, revokeControllers, account, onUpload, onRemove,
+}: PlayerConsoleProps) {
   const [activating, setActivating] = useState(false);
+  const [takingOver, setTakingOver] = useState(false);
+  const [actionError, setActionError] = useState("");
   const online = connection === "connected";
   const ready = online && state.playerOnline && state.playback.ready;
   const current = state.tracks.find(
@@ -364,40 +406,44 @@ function Session({
     setActivating(true);
     try {
       await enable();
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : "Audio activeren is niet gelukt.");
     } finally {
       setActivating(false);
     }
   }
+  async function takeOver() {
+    if (!takeover || takingOver) return;
+    setTakingOver(true);
+    setActionError("");
+    try { await takeover(); }
+    catch (cause) { setActionError(cause instanceof Error ? cause.message : "Overnemen is niet gelukt."); }
+    finally { setTakingOver(false); }
+  }
 
   return (
     <>
-      <Header connected={online} role={isPlayer ? "Afspeler" : "Bediening"} />
+      <Header connected={online} role="Afspeler" cloud={cloud} />
       <main className="page-width workspace">
         <div className="page-heading">
           <div>
             <div className="eyebrow">
-              {isPlayer ? "AFSPELER · PA-PC" : "BEDIENING · OP AFSTAND"}
+              AFSPELER · PA-PC
             </div>
             <h1>
-              {isPlayer ? "Klaar voor jouw moment." : "Jij hebt de regie."}
+              Klaar voor jouw moment.
             </h1>
             <p>
-              {isPlayer
-                ? "Voeg fragmenten toe en bedien het geluid vanuit de zaal."
-                : "Het geluid speelt af op de pc die met de PA is verbonden."}
+              Kies je liedjes, zet effecten klaar en bedien het geluid vanuit de zaal.
             </p>
           </div>
-          {isPlayer ? (
+          <div className="player-heading-actions">
             <Button variant="outline" asChild>
-              <a href="/control" target="_blank" rel="noreferrer">
+              <a href={appPath("/control")} target="_blank" rel="noreferrer">
                 <Smartphone /> Bediening openen <ArrowUpRight />
               </a>
             </Button>
-          ) : (
-            <Button variant="ghost" onClick={onInvalidSession}>
-              <Link2 /> Ontkoppelen
-            </Button>
-          )}
+          </div>
         </div>
         {connection === "busy" ? (
           <div className="notice warning" role="alert">
@@ -405,12 +451,11 @@ function Session({
             <div>
               <strong>Er is al een afspeler actief.</strong>
               <p>
-                Gebruik het andere afspelertabblad op deze pc, of sluit dat
-                tabblad en vernieuw deze pagina.
+                {cloud ? "Gebruik de actieve pc of neem hier de afspeler over. Het geluid op de andere pc stopt zodra die de overname ontvangt." : "Gebruik het andere afspelertabblad op deze pc, of sluit dat tabblad en vernieuw deze pagina."}
               </p>
             </div>
-            <Button variant="outline" onClick={() => location.reload()}>
-              Opnieuw proberen
+            <Button variant="outline" disabled={takingOver} onClick={takeover ? () => void takeOver() : () => location.reload()}>
+              {takeover ? takingOver ? "Overnemen…" : "Afspeler overnemen" : "Opnieuw proberen"}
             </Button>
           </div>
         ) : (
@@ -424,24 +469,22 @@ function Session({
                     : "Verbinding onderbroken"}
                 </strong>
                 <p>
-                  {isPlayer
-                    ? "Audio is gestopt. Na herstel kun je de audio opnieuw activeren."
-                    : "Opdrachten staan uit totdat de verbinding terug is. Audio op de pc kan doorspelen."}
+                  {cloud ? "De verbinding wordt hersteld. De bediening is tijdelijk uitgeschakeld." : "Audio is gestopt. Na herstel kun je de audio opnieuw activeren."}
                 </p>
               </div>
               <LoaderCircle className="spin" />
             </div>
           )
         )}
-        {(error || state.playback.error) && (
+        {(actionError || error || state.playback.error) && (
           <div className="notice error" role="alert">
             <CircleHelp />
-            <p>{error || state.playback.error}</p>
-            {error && (
+            <p>{actionError || error || state.playback.error}</p>
+            {(actionError || error) && (
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={clearError}
+                onClick={() => { setActionError(""); clearError(); }}
                 aria-label="Melding sluiten"
               >
                 <X />
@@ -449,9 +492,9 @@ function Session({
             )}
           </div>
         )}
-        <div className={cn("console-grid", !isPlayer && "controller-grid")}>
+        <div className="console-grid">
           <div className="main-column">
-            {isPlayer && !state.playback.ready && connection !== "busy" && (
+            {!state.playback.ready && connection !== "busy" && (
               <section className="activation">
                 <div className="activation-icon">
                   <Headphones size={23} />
@@ -475,24 +518,32 @@ function Session({
               playback={state.playback}
               current={current}
               ready={ready}
+              canStop={online && state.playerOnline && (!!current || !!state.playback.effectTrackId)}
               reason={reason}
               command={command}
             />
-            <Library
+            <AudioLibrary
               tracks={state.tracks}
-              selectedId={state.playback.trackId}
+              playback={state.playback}
               token={token}
               ready={ready}
               online={online}
               command={command}
+              cloud={cloud}
+              onUpload={onUpload}
+              onRemove={onRemove}
             />
           </div>
-          {isPlayer && setup && (
+          {(setup || account) && (
             <aside className="side-column">
-              <ConnectionPanel
+              {setup && <ConnectionPanel
                 setup={setup}
                 controllerCount={state.controllerCount}
-              />
+                cloud={cloud}
+                refreshPin={refreshPin}
+                revokeControllers={revokeControllers}
+              />}
+              {account}
               <section className="output-note">
                 <Headphones size={20} />
                 <div>
@@ -515,7 +566,7 @@ function Session({
               : "Afspeler nog niet gereed"}
           </span>
           <span>
-            <ShieldCheck size={14} /> Blijft op je lokale netwerk
+            <ShieldCheck size={14} /> {cloud ? "Privé verbonden met je account" : "Blijft op je lokale netwerk"}
           </span>
         </div>
       </main>
@@ -528,12 +579,14 @@ function Transport({
   playback,
   current,
   ready,
+  canStop,
   reason,
   command,
 }: {
   playback: Playback;
   current?: Track;
   ready: boolean;
+  canStop: boolean;
   reason: string;
   command: (command: Command) => void;
 }) {
@@ -544,6 +597,7 @@ function Transport({
   const playing = playback.status === "playing";
   const volume = dragVolume ?? Math.round(playback.volume * 100);
   const position = dragSeek ?? playback.currentTime;
+  const queueIndex = playback.trackId ? playback.queue.indexOf(playback.trackId) : -1;
   const changeVolume = (value: number) => {
     command({ action: "volume", value: value / 100 });
   };
@@ -599,6 +653,11 @@ function Transport({
           <span>{formatTime(playback.duration)}</span>
         </div>
       </div>
+      {playback.queue.length > 0 && <div className="playlist-transport">
+        <Button variant="ghost" size="sm" disabled={!ready || queueIndex <= 0} aria-label="Vorig liedje" onClick={() => command({ action: 'previous' })}><SkipBack /> Vorige</Button>
+        <span>{queueIndex >= 0 ? `${queueIndex + 1} van ${playback.queue.length}` : `${playback.queue.length} liedjes klaar`}<small>Afspeellijst · speelt automatisch door</small></span>
+        <Button variant="ghost" size="sm" disabled={!ready || queueIndex >= playback.queue.length - 1} aria-label="Volgend liedje" onClick={() => command({ action: 'next' })}>Volgende <SkipForward /></Button>
+      </div>}
       <div className="transport-buttons">
         <Button
           className="play-button"
@@ -619,8 +678,9 @@ function Transport({
         <Button
           variant="outline"
           className="stop-button"
-          disabled={!enabled}
+          disabled={!canStop}
           onClick={() => command({ action: "stop" })}
+          title="Stopt de muziek en het geluidseffect"
         >
           <Square size={18} fill="currentColor" /> Stoppen
         </Button>
@@ -636,7 +696,7 @@ function Transport({
       {reason && <p className="control-hint">{reason}</p>}
       <div className="volume-section">
         <div className="volume-heading">
-          <label id="volume-label">Uitvoervolume</label>
+          <label id="volume-label">Muziekvolume</label>
           <span>
             {volume}
             <small>%</small>
@@ -677,220 +737,49 @@ function Transport({
   );
 }
 
-function Library({
-  tracks,
-  selectedId,
-  token,
-  ready,
-  online,
-  command,
-}: {
-  tracks: Track[];
-  selectedId: string | null;
-  token: string;
-  ready: boolean;
-  online: boolean;
-  command: (command: Command) => void;
-}) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState("");
-  const [deleting, setDeleting] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  async function upload(files: FileList | null) {
-    if (!files?.length) return;
-    setUploading(true);
-    setError("");
-    try {
-      const form = new FormData();
-      for (const file of Array.from(files)) {
-        if (file.size > 500 * 1024 * 1024)
-          throw new Error(`${file.name} is groter dan 500 MB.`);
-        form.append("files", file);
-      }
-      await fetch("/api/tracks", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: form,
-      }).then(responseData);
-    } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : "Toevoegen is niet gelukt.",
-      );
-    } finally {
-      setUploading(false);
-      if (inputRef.current) inputRef.current.value = "";
-    }
-  }
-  async function remove(id: string) {
-    setDeleting(id);
-    setError("");
-    try {
-      await fetch(`/api/tracks/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      }).then(responseData);
-      setConfirmDelete(null);
-    } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : "Verwijderen is niet gelukt.",
-      );
-    } finally {
-      setDeleting(null);
-    }
-  }
-  return (
-    <section className="library panel">
-      <div className="library-heading">
-        <div>
-          <h2>
-            Audiofragmenten <span className="track-count">{tracks.length}</span>
-          </h2>
-          <p>Tik op een fragment om het klaar te zetten.</p>
-        </div>
-        {isPlayer && (
-          <>
-            <input
-              ref={inputRef}
-              type="file"
-              multiple
-              accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac,.aac,.webm,.opus"
-              className="sr-only"
-              tabIndex={-1}
-              aria-label="Audiobestanden toevoegen"
-              onChange={(event) => void upload(event.target.files)}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => inputRef.current?.click()}
-              disabled={uploading || !online}
-            >
-              {uploading ? <LoaderCircle className="spin" /> : <Plus />}{" "}
-              {uploading ? "Toevoegen…" : "Audio toevoegen"}
-            </Button>
-          </>
-        )}
-      </div>
-      {error && (
-        <p className="library-error" role="alert">
-          {error}
-        </p>
-      )}
-      {tracks.length === 0 ? (
-        <div className="empty-library">
-          <FileAudio2 size={27} strokeWidth={1.5} />
-          <h3>Jouw fragmenten, hier bij elkaar.</h3>
-          <p>
-            {isPlayer
-              ? "Voeg een audiobestand van deze pc toe."
-              : "Voeg op de PA-pc je eerste audiobestand toe."}
-          </p>
-          <span>MP3, WAV, M4A en meer · tot 500 MB per bestand</span>
-        </div>
-      ) : (
-        <ul className="track-list">
-          {tracks.map((track, index) => (
-            <li
-              key={track.id}
-              className={cn("track-row", track.id === selectedId && "selected")}
-            >
-              <button
-                className="track-select"
-                disabled={!ready}
-                onClick={() => command({ action: "select", trackId: track.id })}
-                aria-label={`${track.name} klaarzetten`}
-                aria-pressed={track.id === selectedId}
-              >
-                <span className="track-number">
-                  {track.id === selectedId ? (
-                    <AudioLines size={19} />
-                  ) : (
-                    String(index + 1).padStart(2, "0")
-                  )}
-                </span>
-                <span className="track-info">
-                  <strong>{track.name}</strong>
-                  <span>
-                    {track.filename.split(".").at(-1)?.toUpperCase()}{" "}
-                    <span className="file-divider">·</span>{" "}
-                    {formatSize(track.size)}
-                  </span>
-                </span>
-                {track.id === selectedId && (
-                  <span className="selected-label">
-                    <Check size={14} /> Klaargezet
-                  </span>
-                )}
-              </button>
-              {isPlayer && (
-                <div className="delete-action">
-                  {confirmDelete === track.id ? (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={deleting === track.id}
-                        onClick={() => void remove(track.id)}
-                        aria-label={`${track.name} definitief verwijderen`}
-                      >
-                        Verwijderen
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Verwijderen annuleren"
-                        onClick={() => setConfirmDelete(null)}
-                      >
-                        <X />
-                      </Button>
-                    </>
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      disabled={track.id === selectedId || !online}
-                      title={
-                        track.id === selectedId
-                          ? "Zet eerst een ander fragment klaar om dit bestand te verwijderen."
-                          : "Fragment verwijderen"
-                      }
-                      aria-label={`${track.name} verwijderen`}
-                      onClick={() => setConfirmDelete(track.id)}
-                    >
-                      <Trash2 size={16} />
-                    </Button>
-                  )}
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="library-footnote">
-        <ShieldCheck size={14} />
-        <span>
-          {isPlayer
-            ? "Bestanden worden op deze pc bewaard."
-            : "Alleen de PA-pc speelt audio af."}{" "}
-          Een selectie start nooit automatisch.
-        </span>
-      </div>
-    </section>
-  );
-}
-
 function ConnectionPanel({
   setup,
   controllerCount,
+  cloud = false,
+  refreshPin,
+  revokeControllers,
 }: {
-  setup: Setup;
+  setup: Setup & { pinExpiresAt?: number };
   controllerCount: number;
+  cloud?: boolean;
+  refreshPin?: () => Promise<void>;
+  revokeControllers?: () => Promise<void>;
 }) {
   const [selectedUrl, setSelectedUrl] = useState(setup.urls[0] || "");
   const [copied, setCopied] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [revoking, setRevoking] = useState(false);
+  const [refreshError, setRefreshError] = useState("");
+  const [now, setNow] = useState(Date.now);
   const urlInput = useRef<HTMLInputElement>(null);
   const activeUrl = selectedUrl || setup.urls[0] || "";
+  useEffect(() => {
+    if (!cloud) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [cloud]);
+  const remainingSeconds = setup.pinExpiresAt ? Math.max(0, Math.ceil((setup.pinExpiresAt - now) / 1000)) : null;
+  async function refresh() {
+    if (!refreshPin || refreshing) return;
+    setRefreshing(true);
+    setRefreshError("");
+    try { await refreshPin(); }
+    catch (cause) { setRefreshError(cause instanceof Error ? cause.message : "Code vernieuwen is niet gelukt."); }
+    finally { setRefreshing(false); }
+  }
+  async function revoke() {
+    if (!revokeControllers || revoking) return;
+    setRevoking(true);
+    setRefreshError("");
+    try { await revokeControllers(); }
+    catch { setRefreshError("Ontkoppelen is niet gelukt. Probeer het opnieuw."); }
+    finally { setRevoking(false); }
+  }
   async function copy() {
     try {
       await navigator.clipboard.writeText(activeUrl);
@@ -916,8 +805,8 @@ function ConnectionPanel({
         <li>
           <span>1</span>
           <div>
-            <strong>Hetzelfde netwerk</strong>
-            <p>Verbind je tablet met de wifi van deze pc.</p>
+            <strong>{cloud ? "Verbind met internet" : "Hetzelfde netwerk"}</strong>
+            <p>{cloud ? "Zorg dat de pc en tablet online zijn." : "Verbind je tablet met de wifi van deze pc."}</p>
           </div>
         </li>
         <li>
@@ -989,12 +878,20 @@ function ConnectionPanel({
         <span>{setup.pin.slice(0, 3)}</span>
         <span>{setup.pin.slice(3)}</span>
       </div>
+      {cloud && <div className="pairing-expiry">
+        <p>{remainingSeconds === null ? "De code is tijdelijk geldig." : remainingSeconds === 0 ? "Deze code is verlopen. Vernieuw de code om te koppelen." : `Nog ${formatTime(remainingSeconds)} geldig`}</p>
+        <Button variant="ghost" size="sm" disabled={refreshing || !refreshPin} onClick={() => void refresh()}>
+          {refreshing ? <LoaderCircle className="spin" /> : <RotateCcw />}{refreshing ? "Vernieuwen…" : "Vernieuw code"}
+        </Button>
+        {refreshError && <p className="error-note" role="alert">{refreshError}</p>}
+      </div>}
       <div className={cn("tablet-status", controllerCount > 0 && "connected")}>
         <span className={cn("status-dot", controllerCount > 0 && "live")} />
         {controllerCount > 0
           ? `${controllerCount} ${controllerCount === 1 ? "bediening verbonden" : "bedieningen verbonden"}`
           : "Wacht op je tablet"}
       </div>
+      {cloud && revokeControllers && <Button className="revoke-controllers" variant="ghost" size="sm" disabled={revoking} onClick={() => void revoke()}><Link2 />{revoking ? "Ontkoppelen…" : "Alle tablets ontkoppelen"}</Button>}
     </section>
   );
 }

@@ -7,6 +7,7 @@ import {
   type ServerMessage,
 } from "../../shared/protocol";
 import { AudioEngine } from "../lib/audio-engine";
+import { appPath } from "../lib/paths";
 
 export type Connection = "connecting" | "connected" | "disconnected" | "busy";
 const emptyRoom: RoomState = {
@@ -54,7 +55,7 @@ export function useRoom(
     const connect = () => {
       if (disposed || blocked) return;
       const ws = new WebSocket(
-        `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/ws?token=${encodeURIComponent(token)}`,
+        `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}${appPath("/ws")}?token=${encodeURIComponent(token)}`,
       );
       socketRef.current = ws;
       connectTimeout = setTimeout(() => {
@@ -104,7 +105,7 @@ export function useRoom(
         // returns to pairing instead of retrying an obsolete token forever.
         retry = setTimeout(
           () => {
-            void fetch("/api/tracks", {
+            void fetch(appPath("/api/tracks"), {
               headers: { Authorization: `Bearer ${token}` },
               signal: AbortSignal.timeout(5000),
             })

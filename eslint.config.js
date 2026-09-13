@@ -12,6 +12,8 @@ export default tseslint.config(
       "test-results/**",
       "playwright-report/**",
       ".checks/**",
+      ".vercel/**",
+      "convex/_generated/**",
     ],
   },
   js.configs.recommended,
