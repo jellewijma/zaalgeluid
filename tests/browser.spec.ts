@@ -84,7 +84,7 @@ async function observeNativeMedia(context: BrowserContext) {
 
 async function media(page: Page) {
   return page.evaluate(() => {
-    const audio = window.__e2eAudio.at(-1)
+    const audio = window.__e2eAudio.at(-2)
     if (!audio) throw new Error('There is no player audio element')
     return { src: audio.currentSrc, sourceAttribute: audio.getAttribute('src'), paused: audio.paused, currentTime: audio.currentTime, duration: audio.duration, ended: audio.ended }
   })
@@ -104,12 +104,12 @@ async function pair(controller: Page, pin: string) {
   await controller.keyboard.press('Tab')
   await expect(controller.getByRole('button', { name: 'Verbind met de afspeler' })).toBeFocused()
   await controller.keyboard.press('Enter')
-  await expect(controller.getByRole('heading', { name: 'Jij hebt de regie.' })).toBeVisible()
+  await expect(controller.getByRole('heading', { name: 'Bediening', exact: true })).toBeVisible()
 }
 
 async function session(browser: Browser) {
   const playerContext = await browser.newContext({ baseURL })
-  const controllerContext = await browser.newContext({ baseURL, viewport: { width: 768, height: 1024 } })
+  const controllerContext = await browser.newContext({ baseURL, viewport: { width: 768, height: 1024 }, hasTouch: true })
   await observeNativeMedia(playerContext)
   await observeNativeMedia(controllerContext)
   const player = await playerContext.newPage()
@@ -139,9 +139,49 @@ async function activateAndUpload(player: Page, controller: Page, name: string, b
   await player.keyboard.press('Enter')
   await expect(player.getByText('Afspeler verbonden en audio geactiveerd', { exact: true })).toBeVisible()
   await player.getByLabel('Audiobestanden toevoegen').setInputFiles({ name: `${name}.wav`, mimeType: 'audio/wav', buffer })
-  await expect(controller.getByRole('button', { name: `${name} klaarzetten`, exact: true })).toBeEnabled()
-  await controller.getByRole('button', { name: `${name} klaarzetten`, exact: true }).click()
+  await chooseFragment(controller, name)
   await expect(player.getByRole('heading', { name, exact: true })).toBeVisible()
+}
+
+async function chooseFragment(controller: Page, name: string) {
+  const previous = controller.getByRole('button', { name: 'Vorige fragmenten', exact: true })
+  while (await previous.isVisible() && await previous.isEnabled()) await previous.tap()
+  const fragment = controller.getByRole('button', { name: `${name} klaarzetten`, exact: true })
+  for (let page = 0; page < 50; page++) {
+    if (await fragment.isVisible()) break
+    const next = controller.getByRole('button', { name: 'Volgende fragmenten', exact: true })
+    if (!await next.isVisible() || !await next.isEnabled()) break
+    await next.tap()
+  }
+  await expect(fragment).toBeEnabled()
+  await fragment.tap()
+}
+
+async function expectTabletOverview(controller: Page) {
+  await expect.poll(() => controller.evaluate(() => ({
+    horizontal: document.documentElement.scrollWidth > innerWidth,
+    vertical: document.documentElement.scrollHeight > innerHeight,
+    internalScroll: [...document.querySelectorAll('*')].some(element => {
+      const style = getComputedStyle(element)
+      return /auto|scroll/.test(style.overflowY) && element.scrollHeight > element.clientHeight + 1
+    }),
+  }))).toEqual({ horizontal: false, vertical: false, internalScroll: false })
+  const panel = await controller.getByRole('region', { name: 'Audiobediening', exact: true }).boundingBox()
+  expect(panel).not.toBeNull()
+  for (const name of ['Afspelen', 'Stoppen', 'Opnieuw', 'Geluid dempen']) {
+    const box = await controller.getByRole('button', { name, exact: true }).boundingBox()
+    expect(box).not.toBeNull()
+    expect(box!.width).toBeGreaterThanOrEqual(48)
+    expect(box!.height).toBeGreaterThanOrEqual(48)
+    expect(box!.y).toBeGreaterThanOrEqual(0)
+    expect(box!.y + box!.height).toBeLessThanOrEqual(controller.viewportSize()!.height)
+    expect(box!.y + box!.height).toBeLessThanOrEqual(panel!.y + panel!.height - 8)
+  }
+  for (const name of ['Muziekvolume', 'Afspeelpositie']) {
+    const box = await controller.getByRole('slider', { name, exact: true }).boundingBox()
+    expect(box).not.toBeNull()
+    expect(box!.y + box!.height).toBeLessThanOrEqual(controller.viewportSize()!.height)
+  }
 }
 
 async function screenshot(page: Page, name: string, testInfo: TestInfo) {
@@ -185,12 +225,12 @@ test('tablet controls genuine playback, pause, restart, stop, gain and keyboard 
     await controller.keyboard.press('Home')
     await expect.poll(async () => (await media(player)).currentTime).toBe(0)
 
-    const volume = controller.getByRole('slider', { name: 'Uitvoervolume', exact: true })
+    const volume = controller.getByRole('slider', { name: 'Muziekvolume', exact: true })
     await tabTo(controller, volume)
     await controller.keyboard.press('Home')
-    await expect.poll(() => player.evaluate(() => window.__e2eGains.at(-1)!.gain.value)).toBe(0)
+    await expect.poll(() => player.evaluate(() => window.__e2eGains.at(-2)!.gain.value)).toBe(0)
     await controller.keyboard.press('ArrowRight')
-    await expect.poll(() => player.evaluate(() => window.__e2eGains.at(-1)!.gain.value)).toBeCloseTo(0.01, 5)
+    await expect.poll(() => player.evaluate(() => window.__e2eGains.at(-2)!.gain.value)).toBeCloseTo(0.01, 5)
     await expect(player.locator('.volume-heading')).toContainText('1%')
 
     const restart = controller.getByRole('button', { name: 'Opnieuw', exact: true })
@@ -274,28 +314,25 @@ test('rapid play-stop remains stopped and an invalid WAV displays a recoverable 
     expect((await media(player)).paused).toBe(true)
     expect((await media(player)).currentTime).toBe(0)
     await player.getByLabel('Audiobestanden toevoegen').setInputFiles({ name: 'Beschadigd fragment.wav', mimeType: 'audio/wav', buffer: Buffer.from('not a valid audio file') })
-    await controller.getByRole('button', { name: 'Beschadigd fragment klaarzetten', exact: true }).click()
+    await chooseFragment(controller, 'Beschadigd fragment')
     await expect(controller.getByRole('alert')).toContainText(/niet ondersteund|beschadigd|niet worden afgespeeld/)
     expect((await media(player)).paused).toBe(true)
-    await controller.getByRole('button', { name: 'Snel stoppen klaarzetten', exact: true }).click()
+    await chooseFragment(controller, 'Snel stoppen')
     await expect(controller.getByRole('alert')).toHaveCount(0)
     await controller.getByRole('button', { name: 'Afspelen', exact: true }).click()
     await expect.poll(async () => (await media(player)).currentTime).toBeGreaterThan(0.2)
   } finally { await pairSession.close() }
 })
 
-test('player and controller fit tablet and phone widths with accessible controls', async ({ browser }, testInfo) => {
+test('tablet overview fits portrait and landscape without scrolling and keeps large controls', async ({ browser }, testInfo) => {
   const pairSession = await session(browser)
   const { player, controller } = pairSession
   try {
     await activateAndUpload(player, controller, 'Fragment met een langere duidelijke naam voor de zaal')
-    for (const page of [player, controller]) {
-      for (const width of [390, 768]) {
-        await page.setViewportSize({ width, height: 1024 })
-        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
-        await expect(page.getByRole('button', { name: 'Stoppen', exact: true })).toBeVisible()
-        await screenshot(page, `${page === player ? 'player' : 'controller'}-${width}.png`, testInfo)
-      }
+    for (const [width, height] of [[1024, 600], [1024, 768], [768, 1024], [820, 1180], [390, 844]]) {
+      await controller.setViewportSize({ width, height })
+      await expectTabletOverview(controller)
+      await screenshot(controller, `controller-${width}x${height}.png`, testInfo)
     }
   } finally { await pairSession.close() }
 })
@@ -319,5 +356,45 @@ test('a fragment ends naturally and clearing its selection allows deletion', asy
     await player.getByRole('button', { name: 'Kort einde verwijderen', exact: true }).click()
     await player.getByRole('button', { name: 'Kort einde definitief verwijderen', exact: true }).click()
     await expect(controller.getByRole('button', { name: 'Kort einde klaarzetten', exact: true })).toHaveCount(0)
+  } finally { await pairSession.close() }
+})
+
+test('many fragments stay reachable by touch without scrolling or starting audio on selection', async ({ browser }, testInfo) => {
+  const pairSession = await session(browser)
+  const { player, controller } = pairSession
+  try {
+    await controller.setViewportSize({ width: 1024, height: 600 })
+    await player.getByRole('button', { name: 'Audio activeren', exact: true }).click()
+    await expect(player.getByText('Afspeler verbonden en audio geactiveerd', { exact: true })).toBeVisible()
+    const uploaded = player.waitForResponse(response => new URL(response.url()).pathname === '/api/tracks' && response.request().method() === 'POST' && response.status() === 201)
+    await player.getByLabel('Audiobestanden toevoegen').setInputFiles(Array.from({ length: 25 }, (_, index) => ({
+      name: `Aanraakfragment ${String(index + 1).padStart(2, '0')}.wav`, mimeType: 'audio/wav', buffer: quietWav(10),
+    })))
+    await uploaded
+    await expect(controller.getByRole('button', { name: 'Volgende fragmenten', exact: true })).toBeEnabled()
+    await chooseFragment(controller, 'Aanraakfragment 25')
+    await expect(player.getByRole('heading', { name: 'Aanraakfragment 25', exact: true })).toBeVisible()
+    expect((await media(player)).paused).toBe(true)
+    await expectTabletOverview(controller)
+    for (const button of await controller.getByRole('button', { name: /klaarzetten$/ }).all()) {
+      const box = await button.boundingBox()
+      expect(box!.height).toBeGreaterThanOrEqual(64)
+      expect(box!.width).toBeGreaterThanOrEqual(64)
+      expect(box!.y + box!.height).toBeLessThanOrEqual(600)
+    }
+    await screenshot(controller, 'tablet-many-fragments.png', testInfo)
+    await controller.getByRole('button', { name: 'Afspelen', exact: true }).tap()
+    await expect.poll(async () => (await media(player)).currentTime).toBeGreaterThan(0.2)
+    await controller.getByRole('button', { name: 'Stoppen', exact: true }).tap()
+    await expect.poll(async () => (await media(player)).currentTime).toBe(0)
+    const volumeTrack = await controller.locator('.tablet-volume [data-slot="slider"]').boundingBox()
+    await controller.touchscreen.tap(volumeTrack!.x + volumeTrack!.width * 0.25, volumeTrack!.y + volumeTrack!.height / 2)
+    await expect.poll(() => player.evaluate(() => window.__e2eGains.at(-2)!.gain.value)).toBeLessThan(0.4)
+    await expect.poll(() => player.evaluate(() => window.__e2eGains.at(-2)!.gain.value)).toBeGreaterThan(0.1)
+    await controller.setViewportSize({ width: 768, height: 1024 })
+    await expectTabletOverview(controller)
+    await chooseFragment(controller, 'Aanraakfragment 01')
+    await expect(player.getByRole('heading', { name: 'Aanraakfragment 01', exact: true })).toBeVisible()
+    expect((await media(player)).paused).toBe(true)
   } finally { await pairSession.close() }
 })

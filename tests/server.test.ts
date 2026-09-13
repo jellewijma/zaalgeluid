@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict'
 import { afterEach, beforeEach, test } from 'node:test'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { request } from 'node:http'
 import { WebSocket } from 'ws'
 import { createAppServer } from '../server/app.js'
-import { initialPlayback, type Playback, type ServerMessage, type Setup, type Track } from '../shared/protocol.js'
+import { initialPlayback, type Command, type Playback, type ServerMessage, type Setup, type Track } from '../shared/protocol.js'
 
 type Instance = Awaited<ReturnType<typeof createAppServer>>
 let instance: Instance
@@ -41,19 +41,38 @@ async function openSocket(token: string) {
   await waitMessage(socket, (message) => message.type === 'state')
   return socket
 }
-async function upload(name = 'Aankondiging.wav', bytes = Buffer.from('0123456789audio-data')) {
+async function upload(name = 'Aankondiging.wav', bytes = Buffer.from('0123456789audio-data'), kind?: Track['kind']) {
   const body = new FormData()
   body.append('files', new Blob([new Uint8Array(bytes)], { type: 'audio/wav' }), name)
-  const response = await fetch(`${baseUrl}/api/tracks`, { method: 'POST', headers: headers(setup.token), body })
+  const response = await fetch(`${baseUrl}/api/tracks${kind ? `?kind=${kind}` : ''}`, { method: 'POST', headers: headers(setup.token), body })
   assert.equal(response.status, 201)
   const result = await response.json() as { tracks: Track[] }
   return result.tracks[0]!
 }
 async function report(player: WebSocket, playback: Partial<Playback> = {}) {
   const next = { ...initialPlayback, ready: true, ...playback }
-  const state = waitMessage(player, (message) => message.type === 'state' && message.state.playback.ready === next.ready && message.state.playback.status === next.status)
+  const state = waitMessage(player, (message) => message.type === 'state'
+    && message.state.playback.ready === next.ready && message.state.playback.status === next.status
+    && message.state.playback.trackId === next.trackId && message.state.playback.effectTrackId === next.effectTrackId
+    && message.state.playback.effectStatus === next.effectStatus
+    && JSON.stringify(message.state.playback.queue) === JSON.stringify(next.queue))
   player.send(JSON.stringify({ type: 'playback', playback: next }))
   await state
+}
+async function relay(sender: WebSocket, player: WebSocket, command: Command) {
+  const incoming = waitMessage(player, (message) => message.type === 'command')
+  sender.send(JSON.stringify({ type: 'command', command }))
+  const message = await incoming
+  assert.deepEqual(message.type === 'command' && message.command, command)
+}
+async function rejectMessage(socket: WebSocket, message: unknown, code: string) {
+  const rejected = waitMessage(socket, (value) => value.type === 'error')
+  socket.send(JSON.stringify(message))
+  const error = await rejected
+  assert.equal(error.type === 'error' && error.code, code)
+}
+async function deleteTrack(track: Track) {
+  return (await fetch(`${baseUrl}/api/tracks/${track.id}`, { method: 'DELETE', headers: headers(setup.token) })).status
 }
 
 beforeEach(async () => {
@@ -216,6 +235,133 @@ test('clearing the final selected track relays to the player and permits removal
   const emptyClear = waitMessage(player, (message) => message.type === 'command')
   player.send(JSON.stringify({ type: 'command', command: { action: 'clear' } }))
   assert.equal((await emptyClear).type, 'command')
+})
+
+test('legacy tracks stay intact as music while effect uploads preserve their kind and bytes across restart', async () => {
+  const music = await upload('Bestaand liedje.wav')
+  const effectBytes = Buffer.from('effect-audio-payload')
+  const effect = await upload('Applaus.wav', effectBytes, 'effect')
+  assert.equal(music.kind, 'music')
+  assert.equal(effect.kind, 'effect')
+  await instance.close()
+  const manifestPath = path.join(dataDir, 'library.json')
+  const saved = JSON.parse(await readFile(manifestPath, 'utf8')) as Array<Track & { storedFilename: string }>
+  delete saved[0].kind
+  const legacyManifest = JSON.stringify(saved, null, 2) + '\n'
+  await writeFile(manifestPath, legacyManifest)
+  instance = await createAppServer({ dataDir, port: 0, host: '127.0.0.1' })
+  const { port } = await instance.listen()
+  baseUrl = `http://127.0.0.1:${port}`
+  setup = await (await fetch(`${baseUrl}/api/setup`)).json() as Setup
+  assert.equal(await readFile(manifestPath, 'utf8'), legacyManifest, 'Starting the app must not rewrite an existing library')
+  const tracks = await (await fetch(`${baseUrl}/api/tracks`, { headers: headers(setup.token) })).json() as Track[]
+  assert.deepEqual(tracks, [music, effect])
+  assert.deepEqual(Buffer.from(await (await fetch(`${baseUrl}/api/audio/${effect.id}?token=${setup.token}`)).arrayBuffer()), effectBytes)
+  await upload('Nieuw liedje.wav')
+  const afterUpload = JSON.parse(await readFile(manifestPath, 'utf8')) as typeof saved
+  assert.deepEqual(afterUpload.slice(0, 2), saved)
+  const invalid = new FormData()
+  invalid.append('files', new Blob(['sound']), 'sound.wav')
+  assert.equal((await fetch(`${baseUrl}/api/tracks?kind=unknown`, { method: 'POST', headers: headers(setup.token), body: invalid })).status, 400)
+})
+
+test('commands and player telemetry enforce the boundary between music and effects', async () => {
+  const music = await upload()
+  const effect = await upload('Bel.wav', Buffer.from('bell'), 'effect')
+  const player = await openSocket(setup.token)
+  const controller = await openSocket(controllerToken)
+  await report(player)
+  for (const command of [
+    { action: 'select', trackId: effect.id },
+    { action: 'queue-add', trackId: effect.id },
+    { action: 'queue-remove', trackId: effect.id },
+    { action: 'effect-play', trackId: music.id },
+    { action: 'effect-play', trackId: 'missing' },
+    { action: 'effect-volume', value: 1.01 },
+    { action: 'effect-volume', value: '0.5' },
+  ]) await rejectMessage(controller, { type: 'command', command }, 'INVALID_COMMAND')
+  for (const invalid of [
+    { trackId: effect.id },
+    { queue: [effect.id] },
+    { queue: [music.id, music.id] },
+    { queue: ['missing'] },
+    { queue: 'not-an-array' },
+    { effectTrackId: music.id },
+    { effectTrackId: null, effectStatus: 'playing' },
+    { effectVolume: -0.1 },
+  ]) await rejectMessage(player, { type: 'playback', playback: { ...initialPlayback, ready: true, ...invalid } }, 'INVALID_PLAYBACK')
+  await relay(controller, player, { action: 'queue-add', trackId: music.id })
+  await relay(controller, player, { action: 'effect-play', trackId: effect.id })
+  await relay(controller, player, { action: 'effect-volume', value: 0.25 })
+})
+
+test('effects work without selected music and remain protected until stop is acknowledged', async () => {
+  const effect = await upload('Applaus.wav', Buffer.from('applause'), 'effect')
+  const player = await openSocket(setup.token)
+  const controller = await openSocket(controllerToken)
+  await report(player)
+  await rejectMessage(controller, { type: 'command', command: { action: 'play' } }, 'NO_TRACK')
+  await relay(controller, player, { action: 'effect-play', trackId: effect.id })
+  assert.equal(await deleteTrack(effect), 409, 'Pending effect must not be deleted before the player reports it')
+  const effectState = waitMessage(controller, (message) => message.type === 'state' && message.state.playback.effectStatus === 'playing')
+  await report(player, { effectTrackId: effect.id, effectStatus: 'playing', effectVolume: 0.4 })
+  const message = await effectState
+  assert.equal(message.type === 'state' && message.state.playback.trackId, null)
+  assert.equal(message.type === 'state' && message.state.playback.status, 'idle')
+  assert.equal(message.type === 'state' && message.state.playback.effectVolume, 0.4)
+  assert.equal(await deleteTrack(effect), 409)
+  await relay(controller, player, { action: 'effect-stop' })
+  assert.equal(await deleteTrack(effect), 409, 'Sending stop does not prove the media has stopped yet')
+  await report(player)
+  assert.equal(await deleteTrack(effect), 204)
+})
+
+test('queue telemetry reaches controllers and pending or queued songs cannot be deleted', async () => {
+  const first = await upload('Eerste.wav')
+  const second = await upload('Tweede.wav')
+  const player = await openSocket(setup.token)
+  const controller = await openSocket(controllerToken)
+  await report(player)
+  await relay(controller, player, { action: 'queue-add', trackId: first.id })
+  assert.equal(await deleteTrack(first), 409)
+  await report(player, { trackId: first.id, queue: [first.id], status: 'stopped', duration: 20 })
+  await relay(controller, player, { action: 'queue-add', trackId: second.id })
+  assert.equal(await deleteTrack(second), 409)
+  const queued = waitMessage(controller, (message) => message.type === 'state' && message.state.playback.queue.length === 2)
+  await report(player, { trackId: first.id, queue: [first.id, second.id], status: 'playing', duration: 20 })
+  const message = await queued
+  assert.deepEqual(message.type === 'state' && message.state.playback.queue, [first.id, second.id])
+  await relay(controller, player, { action: 'next' })
+  await relay(controller, player, { action: 'previous' })
+  await relay(controller, player, { action: 'queue-remove', trackId: second.id })
+  assert.equal(await deleteTrack(second), 409)
+  await report(player, { trackId: first.id, queue: [first.id], status: 'playing', duration: 20 })
+  assert.equal(await deleteTrack(second), 204)
+  await relay(controller, player, { action: 'queue-clear' })
+  assert.equal(await deleteTrack(first), 409)
+  await report(player)
+  assert.equal(await deleteTrack(first), 204)
+})
+
+test('emergency music and effect stops still relay if readiness is lost while an effect plays', async () => {
+  const effect = await upload('Bel.wav', Buffer.from('bell'), 'effect')
+  const player = await openSocket(setup.token)
+  const controller = await openSocket(controllerToken)
+  await report(player, { ready: false, effectTrackId: effect.id, effectStatus: 'playing' })
+  await relay(controller, player, { action: 'stop' })
+  await relay(controller, player, { action: 'effect-stop' })
+  await rejectMessage(controller, { type: 'command', command: { action: 'effect-play', trackId: effect.id } }, 'PLAYER_NOT_READY')
+})
+
+test('an effect that cannot start after output interruption does not remain locked for deletion', async () => {
+  const effect = await upload('Onderbroken.wav', Buffer.from('effect'), 'effect')
+  const player = await openSocket(setup.token)
+  const controller = await openSocket(controllerToken)
+  await report(player)
+  await relay(controller, player, { action: 'effect-play', trackId: effect.id })
+  assert.equal(await deleteTrack(effect), 409)
+  await report(player, { ready: false, error: 'Audio-uitvoer onderbroken.' })
+  assert.equal(await deleteTrack(effect), 204)
 })
 
 test('development middleware cannot expose pairing settings, library metadata, or raw audio files', async () => {

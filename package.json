@@ -12,11 +12,16 @@
     "start": "tsx server/index.ts",
     "lint": "eslint .",
     "test": "tsx --test tests/*.test.ts",
-    "test:browser": "playwright test"
+    "test:cloud": "vitest run convex-tests/backend.test.ts",
+    "test:browser": "playwright test",
+    "test:browser:cloud": "playwright test --config playwright.cloud.config.ts"
   },
   "dependencies": {
+    "@convex-dev/auth": "^0.0.95",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "convex": "^1.45.0",
+    "convex-helpers": "^0.1.124",
     "express": "^5.2.1",
     "lucide-react": "^1.45.0",
     "multer": "^2.3.0",
@@ -39,12 +44,14 @@
     "@types/react-dom": "^19.3.0",
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^6.1.1",
+    "convex-test": "^0.0.58",
     "eslint": "^10.10.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.6",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.70.0",
-    "vite": "^8.3.0"
+    "vite": "^8.3.0",
+    "vitest": "^5.0.0"
   }
 }
