@@ -4,6 +4,8 @@ declare global {
   interface Window {
     __resilienceAudio: HTMLAudioElement[]
     __resilienceSockets: WebSocket[]
+    __holdActivationReports: boolean
+    __heldActivationReports: Array<() => void>
   }
 }
 
@@ -33,6 +35,8 @@ async function observe(context: BrowserContext) {
   await context.addInitScript(() => {
     window.__resilienceAudio = []
     window.__resilienceSockets = []
+    window.__holdActivationReports = false
+    window.__heldActivationReports = []
     window.Audio = new Proxy(window.Audio, {
       construct(target, args) {
         const audio = Reflect.construct(target, args) as HTMLAudioElement
@@ -43,7 +47,20 @@ async function observe(context: BrowserContext) {
     window.WebSocket = new Proxy(window.WebSocket, {
       construct(target, args) {
         const socket = Reflect.construct(target, args) as WebSocket
-        if (new URL(String(args[0])).hostname.endsWith('.convex.cloud')) window.__resilienceSockets.push(socket)
+        if (new URL(String(args[0])).hostname.endsWith('.convex.cloud')) {
+          window.__resilienceSockets.push(socket)
+          const send = socket.send.bind(socket)
+          socket.send = data => {
+            if (window.__holdActivationReports && typeof data === 'string') {
+              const request = JSON.parse(data) as { type?: string; udfPath?: string; args?: Array<{ playback?: { ready?: boolean } }> }
+              if (request.type === 'Mutation' && request.udfPath === 'rooms:reportPlayback' && request.args?.[0]?.playback?.ready) {
+                window.__heldActivationReports.push(() => send(data))
+                return
+              }
+            }
+            send(data)
+          }
+        }
         return socket
       },
     })
@@ -67,6 +84,8 @@ async function offline(context: BrowserContext, page: Page) {
 
 async function login(page: Page) {
   await page.goto('player')
+  await expect(page.locator('.password-login')).toBeVisible()
+  if (!await page.getByLabel('Gebruikersnaam', { exact: true }).isVisible()) await page.getByText('Aanmelden met wachtwoord', { exact: true }).click()
   await page.getByLabel('Gebruikersnaam', { exact: true }).fill(username)
   try { await page.getByLabel('Wachtwoord', { exact: true }).fill(password!) }
   catch { throw new Error('Het wachtwoordveld is niet bereikbaar.') }
@@ -100,7 +119,7 @@ test('DEV: short outage buffers both channels, expired commands stay ignored, lo
     await first.getByLabel('Geluidseffecten toevoegen', { exact: true }).setInputFiles({ name: `${effect}.wav`, mimeType: 'audio/wav', buffer: quietWav() })
     await expect(first.getByRole('button', { name: `${effect} afspelen`, exact: true })).toBeVisible()
     const pin = (await first.locator('.pairing-code').getAttribute('aria-label'))!.replace(/\D/g, '')
-    await tablet.goto('control')
+    await tablet.goto(await first.getByLabel('Adres voor de tablet', { exact: true }).inputValue())
     await tablet.getByLabel('Koppelcode', { exact: true }).fill(pin)
     await tablet.getByRole('button', { name: 'Verbind met de afspeler', exact: true }).click()
     await expect(tablet.getByRole('heading', { name: 'Bediening', exact: true })).toBeVisible()
@@ -136,10 +155,20 @@ test('DEV: short outage buffers both channels, expired commands stay ignored, lo
     await first.waitForTimeout(Math.max(0, 46_000 - (Date.now() - offlineStart)))
     await login(next)
     await expect(next.getByRole('button', { name: 'Audio activeren', exact: true })).toBeEnabled()
+    // Model delayed delivery of activation. A restored song must not become
+    // playable until the server can accept play commands for this new PC.
+    await next.evaluate(() => { window.__holdActivationReports = true })
     await next.getByRole('button', { name: 'Audio activeren', exact: true }).click()
+    await expect.poll(() => next.evaluate(() => window.__heldActivationReports.length)).toBeGreaterThan(0)
+    await expect(next.getByRole('button', { name: /^(Afspelen|Hervatten)$/, exact: true })).toBeDisabled()
+    await next.evaluate(() => {
+      window.__holdActivationReports = false
+      window.__heldActivationReports.splice(0).forEach(send => send())
+    })
     await expect(next.getByRole('button', { name: /^(Afspelen|Hervatten)$/, exact: true })).toBeEnabled()
     await next.getByRole('button', { name: /^(Afspelen|Hervatten)$/, exact: true }).click()
     await expect.poll(async () => (await media(next))[0]?.paused).toBe(false)
+    await expect(next.getByText('Activeer eerst het geluid op de speler.', { exact: true })).toHaveCount(0)
     await firstContext.setOffline(false)
     await expect(first.getByRole('button', { name: 'Afspeler overnemen', exact: true })).toBeVisible()
     expect((await media(first)).every(audio => audio.paused)).toBe(true)

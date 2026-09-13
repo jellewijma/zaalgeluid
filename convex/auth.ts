@@ -1,5 +1,7 @@
 import { Password } from "@convex-dev/auth/providers/Password";
 import { convexAuth } from "@convex-dev/auth/server";
+import Google from "@auth/core/providers/google";
+import { createAuthUser, googleConfigured, googleProfile, playerRedirect } from "./auth_policy";
 
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   providers: [Password({
@@ -11,5 +13,13 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       }
       return { email: login, name: "Jelle" };
     },
-  })],
+  }), ...(googleConfigured() ? [Google({
+    profile: googleProfile,
+    checks: ["pkce", "state", "nonce"],
+    authorization: { params: { scope: "openid profile email", prompt: "select_account" } },
+  })] : [])],
+  callbacks: {
+    async redirect({ redirectTo }) { return playerRedirect(redirectTo); },
+    createOrUpdateUser: createAuthUser,
+  },
 });

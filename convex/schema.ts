@@ -11,7 +11,7 @@ export default defineSchema({
     pin: v.string(), pinExpiresAt: v.number(), playback: playbackValidator,
     sequence: v.number(), ackSequence: v.number(),
     pairFailures: v.number(), pairWindowStart: v.number(), pairLockedUntil: v.number(),
-  }).index("by_key", ["key"]),
+  }).index("by_key", ["key"]).index("by_ownerId", ["ownerId"]),
   media: defineTable({
     ownerId: v.id("users"), storageId: v.id("_storage"),
     name: v.string(), filename: v.string(), size: v.number(), kind: kindValidator,

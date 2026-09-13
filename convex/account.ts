@@ -1,8 +1,22 @@
 import { createAccount, getAuthUserId, invalidateSessions, modifyAccountCredentials, retrieveAccount } from "@convex-dev/auth/server";
 import { v } from "convex/values";
-import { action, internalAction, internalQuery } from "./_generated/server";
+import { action, internalAction, internalQuery, query } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { ownerLogin } from "./access";
+import { findOwner, isLegacyOwner, ownerLogin } from "./access";
+import { googleConfigured } from "./auth_policy";
+
+export const current = query({
+  args: {}, returns: v.union(v.object({ name: v.string(), email: v.string(), canChangePassword: v.boolean() }), v.null()),
+  handler: async ctx => {
+    const user = await findOwner(ctx);
+    return user ? { name: user.name ?? user.email ?? "", email: user.email ?? "", canChangePassword: await isLegacyOwner(ctx, user._id) } : null;
+  },
+});
+
+export const authMethods = query({
+  args: {}, returns: v.object({ google: v.boolean(), password: v.boolean() }),
+  handler: async () => ({ google: googleConfigured(), password: Boolean(process.env.OWNER_LOGIN?.trim()) }),
+});
 
 function validatePassword(password: string) {
   if (password.length < 12 || password.length > 200) throw new Error("Gebruik een wachtwoord van 12 tot 200 tekens.");

@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { action, mutation, query } from "./_generated/server";
 import type { QueryCtx, MutationCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
-import { assertPlayer, findOwner, getController, getRoom, ownerMutation, toTrack, tokenHash } from "./access";
+import { assertPlayer, findOwner, getController, getRoom, legacyOwnerId, ownerMutation, requestedRoom, toTrack, tokenHash } from "./access";
 import { cloudStateValidator, commandValidator, pendingCommandValidator, playbackValidator, setupValidator } from "./validators";
 import { initialPlayback } from "../shared/protocol";
 import type { Playback, Command } from "../shared/protocol";
@@ -58,10 +58,8 @@ function validateCommand(command: Command, room: Doc<"rooms">, files: Doc<"media
 export const state = query({
   args: { token: v.optional(v.string()) }, returns: v.union(cloudStateValidator, v.null()),
   handler: async (ctx, { token }) => {
-    const room = await getRoom(ctx);
+    const room = await requestedRoom(ctx, token);
     if (!room) return null;
-    const owner = await findOwner(ctx);
-    if (owner?._id !== room.ownerId && (!token || !await getController(ctx, token, room))) return null;
     const now = Date.now();
     const controllers = await ctx.db.query("controllers")
       .withIndex("by_roomId_and_lastSeen", q => q.eq("roomId", room._id).gt("lastSeen", now - CONTROLLER_PRESENCE_MS)).take(MAX_CONTROLLERS);
@@ -85,20 +83,20 @@ export const setup = query({
   handler: async ctx => {
     const owner = await findOwner(ctx);
     if (!owner) return null;
-    const room = await getRoom(ctx);
+    const room = await getRoom(ctx, owner._id);
     if (!room || room.ownerId !== owner._id) return null;
-    return { pin: room.pin, pinExpiresAt: room.pinExpiresAt, playerClientId: room.playerClientId, leaseUntil: room.leaseUntil };
+    return { roomId: room._id, pin: room.pin, pinExpiresAt: room.pinExpiresAt, playerClientId: room.playerClientId, leaseUntil: room.leaseUntil };
   },
 });
 
 export const claimPlayer = ownerMutation({
   args: { clientId: v.string(), pin: v.string(), force: v.optional(v.boolean()), sentAt: v.number() },
-  returns: v.object({ pin: v.string(), pinExpiresAt: v.number(), leaseUntil: v.number(), ackSequence: v.number(), serverNow: v.number() }),
+  returns: v.object({ roomId: v.string(), pin: v.string(), pinExpiresAt: v.number(), leaseUntil: v.number(), ackSequence: v.number(), serverNow: v.number() }),
   handler: async (ctx, { clientId, pin, force, sentAt }) => {
     validClientId(clientId); validPin(pin);
     const now = Date.now();
     assertFreshRequest(sentAt, now);
-    const room = await getRoom(ctx);
+    const room = await getRoom(ctx, ctx.owner._id);
     if (room && room.ownerId !== ctx.owner._id) throw new Error("Geen toegang tot deze speler.");
     if (room && room.playerClientId !== clientId && room.playerClientId !== null && room.leaseUntil > now && !force) {
       throw new Error("Er is al een speler actief. Neem de bediening over om deze speler te gebruiken.");
@@ -106,12 +104,12 @@ export const claimPlayer = ownerMutation({
     const leaseUntil = now + PLAYER_LEASE_MS;
     const pinExpiresAt = now + PAIRING_PIN_MS;
     if (!room) {
-      await ctx.db.insert("rooms", {
+      const roomId = await ctx.db.insert("rooms", {
         key: "primary", ownerId: ctx.owner._id, playerClientId: clientId, leaseUntil, pin, pinExpiresAt,
         playback: initialPlayback, sequence: 0, ackSequence: 0,
         pairFailures: 0, pairWindowStart: now, pairLockedUntil: 0,
       });
-      return { pin, pinExpiresAt, leaseUntil, ackSequence: 0, serverNow: now };
+      return { roomId, pin, pinExpiresAt, leaseUntil, ackSequence: 0, serverNow: now };
     }
     const sameClient = room.playerClientId === clientId;
     const playback: Playback = sameClient ? room.playback : {
@@ -120,7 +118,7 @@ export const claimPlayer = ownerMutation({
     };
     const ackSequence = sameClient ? room.ackSequence : room.sequence;
     await ctx.db.patch(room._id, { playerClientId: clientId, leaseUntil, pin, pinExpiresAt, playback, ackSequence });
-    return { pin, pinExpiresAt, leaseUntil, ackSequence, serverNow: now };
+    return { roomId: room._id, pin, pinExpiresAt, leaseUntil, ackSequence, serverNow: now };
   },
 });
 
@@ -128,17 +126,17 @@ export const rotatePin = ownerMutation({
   args: { clientId: v.string(), pin: v.string() }, returns: setupValidator,
   handler: async (ctx, { clientId, pin }) => {
     validPin(pin);
-    const room = assertPlayer(await getRoom(ctx), ctx.owner._id, clientId);
+    const room = assertPlayer(await getRoom(ctx, ctx.owner._id), ctx.owner._id, clientId);
     const pinExpiresAt = Date.now() + PAIRING_PIN_MS;
     await ctx.db.patch(room._id, { pin, pinExpiresAt });
-    return { pin, pinExpiresAt, playerClientId: room.playerClientId, leaseUntil: room.leaseUntil };
+    return { roomId: room._id, pin, pinExpiresAt, playerClientId: room.playerClientId, leaseUntil: room.leaseUntil };
   },
 });
 
 export const reportPlayback = ownerMutation({
   args: { clientId: v.string(), playback: playbackValidator, ackSequence: v.number() }, returns: v.null(),
   handler: async (ctx, { clientId, playback, ackSequence }) => {
-    const room = assertPlayer(await getRoom(ctx), ctx.owner._id, clientId);
+    const room = assertPlayer(await getRoom(ctx, ctx.owner._id), ctx.owner._id, clientId);
     if (!Number.isSafeInteger(ackSequence) || ackSequence < room.ackSequence || ackSequence > room.sequence) {
       throw new Error("Verouderde bevestiging van de afspeelstatus.");
     }
@@ -151,7 +149,7 @@ export const reportPlayback = ownerMutation({
 export const releasePlayer = ownerMutation({
   args: { clientId: v.string() }, returns: v.null(),
   handler: async (ctx, { clientId }) => {
-    const room = await getRoom(ctx);
+    const room = await getRoom(ctx, ctx.owner._id);
     if (!room || room.ownerId !== ctx.owner._id || room.playerClientId !== clientId) return null;
     await ctx.db.patch(room._id, {
       playerClientId: null, leaseUntil: 0, pinExpiresAt: 0, ackSequence: room.sequence,
@@ -162,13 +160,15 @@ export const releasePlayer = ownerMutation({
 });
 
 export const pair = mutation({
-  args: { pin: v.string(), token: v.string() },
+  args: { pin: v.string(), token: v.string(), roomId: v.optional(v.string()) },
   returns: v.object({ ok: v.boolean(), error: v.union(v.string(), v.null()), expiresAt: v.union(v.number(), v.null()) }),
-  handler: async (ctx, { pin, token }) => {
+  handler: async (ctx, { pin, token, roomId }) => {
     const fail = (error: string) => ({ ok: false, error, expiresAt: null });
     const hash = await tokenHash(token);
     if (!hash) return fail("Ongeldige koppelcode. Vernieuw de pagina.");
-    const room = await getRoom(ctx);
+    const legacyId = roomId === undefined ? await legacyOwnerId(ctx) : null;
+    const id = roomId === undefined ? null : ctx.db.normalizeId("rooms", roomId);
+    const room = roomId === undefined ? (legacyId ? await getRoom(ctx, legacyId) : null) : (id ? await ctx.db.get(id) : null);
     const now = Date.now();
     if (!room || room.playerClientId === null || room.leaseUntil <= now) return fail("Er is geen speler online.");
     if (room.pairLockedUntil > now) return fail("Te veel pogingen. Probeer het over vijf minuten opnieuw.");
@@ -182,6 +182,7 @@ export const pair = mutation({
       return fail(pairFailures >= 8 ? "Te veel pogingen. Probeer het over vijf minuten opnieuw." : "Pincode is onjuist of verlopen.");
     }
     const existing = await ctx.db.query("controllers").withIndex("by_tokenHash", q => q.eq("tokenHash", hash)).unique();
+    if (existing && existing.roomId !== room._id) return fail("Deze koppeling hoort bij een andere speler. Vernieuw de pagina en koppel opnieuw.");
     const active = await ctx.db.query("controllers")
       .withIndex("by_roomId_and_expiresAt", q => q.eq("roomId", room._id).gt("expiresAt", now)).take(MAX_CONTROLLERS);
     if ((!existing || existing.expiresAt <= now) && active.length >= MAX_CONTROLLERS) return fail("Er zijn te veel apparaten gekoppeld. Verbreek bestaande koppelingen op de speler.");
@@ -196,9 +197,9 @@ export const pair = mutation({
 export const controllerHeartbeat = mutation({
   args: { token: v.string() }, returns: v.null(),
   handler: async (ctx, { token }) => {
-    const room = await getRoom(ctx);
-    const controller = room ? await getController(ctx, token, room) : null;
-    if (!controller) throw new Error("Koppeling verlopen. Koppel dit apparaat opnieuw.");
+    const controller = await getController(ctx, token);
+    const room = controller ? await ctx.db.get(controller.roomId) : null;
+    if (!controller || !room) throw new Error("Koppeling verlopen. Koppel dit apparaat opnieuw.");
     await ctx.db.patch(controller._id, { lastSeen: Date.now() });
     return null;
   },
@@ -207,7 +208,7 @@ export const controllerHeartbeat = mutation({
 export const revokeControllers = ownerMutation({
   args: {}, returns: v.null(),
   handler: async ctx => {
-    const room = await getRoom(ctx);
+    const room = await getRoom(ctx, ctx.owner._id);
     if (!room || room.ownerId !== ctx.owner._id) return null;
     const grants = await ctx.db.query("controllers")
       .withIndex("by_roomId_and_expiresAt", q => q.eq("roomId", room._id).gt("expiresAt", Date.now())).take(MAX_CONTROLLERS);
@@ -220,10 +221,8 @@ export const sendCommand = mutation({
   args: { token: v.optional(v.string()), command: commandValidator, sentAt: v.number() },
   returns: v.object({ sequence: v.number() }),
   handler: async (ctx, { token, command, sentAt }) => {
-    const room = await getRoom(ctx);
-    if (!room) throw new Error("Er is geen speler online.");
-    const owner = await findOwner(ctx);
-    if (owner?._id !== room.ownerId && (!token || !await getController(ctx, token, room))) throw new Error("Koppel dit apparaat opnieuw.");
+    const room = await requestedRoom(ctx, token);
+    if (!room) throw new Error("Koppel dit apparaat opnieuw of meld je aan.");
     const now = Date.now();
     assertFreshRequest(sentAt, now);
     if (!room.playerClientId || room.leaseUntil <= now) throw new Error("De speler is offline.");
@@ -246,7 +245,7 @@ export const pendingCommands = query({
   args: { clientId: v.string(), afterSequence: v.number() }, returns: v.array(pendingCommandValidator),
   handler: async (ctx, { clientId, afterSequence }) => {
     const owner = await findOwner(ctx);
-    const room = await getRoom(ctx);
+    const room = owner ? await getRoom(ctx, owner._id) : null;
     if (!owner || !room || room.ownerId !== owner._id || room.playerClientId !== clientId || room.leaseUntil <= Date.now()) return [];
     if (!Number.isSafeInteger(afterSequence) || afterSequence < 0) return [];
     const commands = await ctx.db.query("commands")

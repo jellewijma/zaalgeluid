@@ -1,6 +1,6 @@
 import { useCallback, useState, type FormEvent } from "react";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useAction, useConvexAuth, useMutation } from "convex/react";
+import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { ArrowLeft, KeyRound, Link2, LoaderCircle, LogOut, Monitor, ShieldCheck, Smartphone } from "lucide-react";
 import { Header, Home, PlayerConsole } from "./App";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,18 @@ import { appPath, appRoute } from "@/lib/paths";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 
-const controllerKey = appPath("zaalgeluid-cloud-controller");
+// A tablet may control different accounts in the same browser. Never reuse one
+// account's controller capability when opening another account's pairing link.
+const roomId = new URLSearchParams(location.search).get("room") || undefined;
+const controllerKey = appPath("zaalgeluid-cloud-controller") + (roomId ? `:${roomId}` : "");
+
+function oauthError() {
+  const params = new URLSearchParams(location.search);
+  if (!params.has("error") && !params.has("error_description")) return "";
+  return params.get("error") === "access_denied"
+    ? "De Google-aanmelding is geannuleerd. Je kunt het opnieuw proberen."
+    : "Aanmelden met Google is niet gelukt. Probeer het opnieuw.";
+}
 
 export default function CloudApp() {
   const { isAuthenticated, isLoading } = useConvexAuth();
@@ -40,20 +51,41 @@ export default function CloudApp() {
 
 function OwnerLogin({ notice }: { notice: string }) {
   const { signIn } = useAuthActions();
+  const methods = useQuery(api.account.authMethods, {});
   const [username, setUsername] = useState("jelle");
   const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [busy, setBusy] = useState<"google" | "password" | null>(null);
+  const [error, setError] = useState(oauthError);
+  const [passwordExpanded, setPasswordExpanded] = useState(false);
+  async function googleLogin() {
+    if (busy || !methods?.google) return;
+    setBusy("google");
+    setError("");
+    const url = new URL(location.href);
+    url.searchParams.delete("error");
+    url.searchParams.delete("error_description");
+    history.replaceState(history.state, "", url.pathname + url.search + url.hash);
+    try {
+      const result = await signIn("google", { redirectTo: location.origin + appPath("/player") });
+      if (!result.redirect) {
+        setError("Aanmelden met Google is niet gelukt. Probeer het opnieuw.");
+        setBusy(null);
+      }
+    } catch {
+      setError("Aanmelden met Google is niet gelukt. Controleer je internetverbinding en probeer het opnieuw.");
+      setBusy(null);
+    }
+  }
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (busy) return;
-    setBusy(true);
+    setBusy("password");
     setError("");
     try {
       await signIn("password", { email: username.trim(), password, flow: "signIn" });
     } catch {
       setError("Aanmelden is niet gelukt. Controleer je gebruikersnaam en wachtwoord, en probeer het opnieuw.");
-    } finally { setBusy(false); }
+    } finally { setBusy(null); }
   }
   return <>
     <Header cloud role="Afspeler" />
@@ -64,13 +96,27 @@ function OwnerLogin({ notice }: { notice: string }) {
       <h1>Meld je aan op de pc.</h1>
       <p>Open je liedjes en effecten. Daarna koppel je de tablet met de code op het scherm.</p>
       {notice && <p className="account-notice" role="status">{notice}</p>}
-      <form onSubmit={event => void submit(event)}>
-        <div className="account-field"><label htmlFor="owner-username">Gebruikersnaam</label><Input id="owner-username" autoComplete="username" value={username} onChange={event => setUsername(event.target.value)} required maxLength={100} disabled={busy} /></div>
-        <div className="account-field"><label htmlFor="owner-password">Wachtwoord</label><Input id="owner-password" type="password" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} required maxLength={200} disabled={busy} aria-describedby={error ? "login-error" : undefined} /></div>
-        <Button className="pair-submit" type="submit" disabled={busy || !username.trim() || !password}>{busy ? <LoaderCircle className="spin" /> : <KeyRound />}{busy ? "Aanmelden…" : "Aanmelden"}</Button>
+      <div className="login-options">
+        {methods === undefined ? <p className="login-method-status" role="status"><LoaderCircle size={16} className="spin" /> Aanmeldopties laden…</p> : methods.google ? <>
+          <Button className="google-login" variant="outline" disabled={busy !== null} onClick={() => void googleLogin()} aria-describedby={error ? "login-error" : undefined}>
+            {/* Asset: https://developers.google.com/identity/branding-guidelines */}
+            <img src={appPath("/google-g.png")} alt="" width={20} height={20} />
+            {busy === "google" ? "Google openen…" : "Doorgaan met Google"}
+          </Button>
+          <p className="login-method-help">Je Google-account krijgt een eigen bibliotheek en afspeler.</p>
+        </> : <p className="login-method-status" role="status">Google-aanmelding wordt nog ingesteld.</p>}
         {error && <p id="login-error" className="error-note" role="alert">{error}</p>}
-      </form>
-      <div className="pairing-hint"><Smartphone size={18} /><span>Gebruik op je tablet <a href={appPath("/control")}>de bediening</a>. Daar is alleen de koppelcode nodig.</span></div>
+        {methods?.password && <details className="password-login" open={passwordExpanded || !methods.google} onToggle={event => setPasswordExpanded(event.currentTarget.open)}>
+          <summary>Aanmelden met wachtwoord</summary>
+          <form onSubmit={event => void submit(event)}>
+            <div className="account-field"><label htmlFor="owner-username">Gebruikersnaam</label><Input id="owner-username" autoComplete="username" value={username} onChange={event => setUsername(event.target.value)} required maxLength={100} disabled={busy !== null} /></div>
+            <div className="account-field"><label htmlFor="owner-password">Wachtwoord</label><Input id="owner-password" type="password" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} required maxLength={200} disabled={busy !== null} aria-describedby={error ? "login-error" : undefined} /></div>
+            <Button className="pair-submit" variant="outline" type="submit" disabled={busy !== null || !username.trim() || !password}>{busy === "password" ? <LoaderCircle className="spin" /> : <KeyRound />}{busy === "password" ? "Aanmelden…" : "Aanmelden"}</Button>
+          </form>
+        </details>}
+      </div>
+      <div className="pairing-hint"><Smartphone size={18} /><span>Scan op je tablet de QR-code of open de persoonlijke tabletlink die na het aanmelden op de pc verschijnt.</span></div>
+      <p className="privacy-link"><a href={appPath("/privacy")}>Privacy en je gegevens</a></p>
     </main>
   </>;
 }
@@ -88,7 +134,7 @@ function CloudPairing({ onPaired }: { onPaired: (token: string) => void }) {
     try {
       const bytes = crypto.getRandomValues(new Uint8Array(32));
       const token = Array.from(bytes, value => value.toString(16).padStart(2, "0")).join("");
-      const result = await pair({ pin, token });
+      const result = await pair({ pin, token, ...(roomId ? { roomId } : {}) });
       if (!result.ok) {
         setError(result.error || "De koppelcode is onjuist of verlopen. Vernieuw de code op de pc en probeer het opnieuw.");
         return;
@@ -106,7 +152,8 @@ function CloudPairing({ onPaired }: { onPaired: (token: string) => void }) {
       <div className="pairing-icon"><Smartphone size={30} /></div>
       <div className="eyebrow">BEDIENING KOPPELEN</div>
       <h1>Neem de bediening over.</h1>
-      <p>Vul de 6-cijferige koppelcode in die op het afspelerscherm van de pc staat.</p>
+      <p>{roomId ? "Vul de 6-cijferige koppelcode in die op het afspelerscherm van de pc staat." : "Scan de QR-code op de pc of open de persoonlijke tabletlink. Zo bedien je jouw eigen afspeler."}</p>
+      {!roomId && <p>Heb je nog een koppelcode zonder persoonlijke link? Die kun je hieronder invullen.</p>}
       <form onSubmit={event => void submit(event)}>
         <label htmlFor="pairing-code">Koppelcode</label>
         <Input id="pairing-code" className="pin-input" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} placeholder="000000" value={pin} onChange={event => setPin(event.target.value.replace(/\D/g, "").slice(0, 6))} required autoFocus disabled={busy} aria-describedby={error ? "pair-error" : undefined} />
@@ -153,6 +200,7 @@ function CloudPlayer({ onInvalidSession, onPasswordChanged }: { onInvalidSession
 
 function AccountControls({ onPasswordChanged }: { onPasswordChanged: () => void }) {
   const { signOut } = useAuthActions();
+  const account = useQuery(api.account.current, {});
   const changePassword = useAction(api.account.changePassword);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -183,8 +231,8 @@ function AccountControls({ onPasswordChanged }: { onPasswordChanged: () => void 
     finally { setBusy(false); }
   }
   return <section className="account-panel" aria-label="Je account">
-    <div className="account-heading"><span><ShieldCheck size={16} /> Aangemeld als Jelle</span><Button size="sm" variant="ghost" disabled={busy} onClick={() => void logout()}><LogOut /> Afmelden</Button></div>
-    <details><summary>Wachtwoord wijzigen</summary>
+    <div className="account-heading"><span><ShieldCheck size={16} /><span>{account ? `Aangemeld als ${account.name || account.email || "gebruiker"}` : "Aangemeld"}</span></span><Button size="sm" variant="ghost" disabled={busy} onClick={() => void logout()}><LogOut /> Afmelden</Button></div>
+    {account?.canChangePassword && <details><summary>Wachtwoord wijzigen</summary>
       <form onSubmit={event => void submit(event)}>
         <p className="account-help">Gebruik 12 tot 200 tekens. Je wordt daarna op alle apparaten afgemeld en de audio stopt.</p>
         <div className="account-field">
@@ -207,7 +255,7 @@ function AccountControls({ onPasswordChanged }: { onPasswordChanged: () => void 
         </div>
         <Button type="submit" variant="outline" disabled={busy}>{busy ? <LoaderCircle className="spin" /> : <KeyRound />} Wachtwoord wijzigen</Button>
       </form>
-    </details>
+    </details>}
     {error && <p className="error-note" role="alert">{error}</p>}
   </section>;
 }
