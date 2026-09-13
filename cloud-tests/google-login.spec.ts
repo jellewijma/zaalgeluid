@@ -35,16 +35,33 @@ test('cancelled Google sign-in shows a safe message and can be retried', async (
   await expect(page.getByText('Aanmeldopties laden…', { exact: true })).toHaveCount(0)
   const google = page.getByRole('button', { name: 'Doorgaan met Google', exact: true })
   test.skip(!await google.isVisible(), 'Google OAuth is not configured on this backend yet.')
-  // Verify the real OAuth initiation without entering an account or granting consent.
-  await page.route('https://accounts.google.com/**', route => route.fulfill({
-    status: 200,
-    contentType: 'text/html',
-    body: '<!doctype html><title>Google OAuth reached</title><p>Google OAuth reached</p>',
-  }))
+  // Observe the real redirect chain. Intercepting a later hop in an HTTP redirect
+  // chain does not reliably replace Google's document in browser routing.
+  const bridgeRequest = page.waitForRequest(request => {
+    const url = new URL(request.url())
+    return request.isNavigationRequest() && url.hostname.endsWith('.convex.site') && url.pathname === '/api/auth/signin/google'
+  })
+  const googleRequest = page.waitForRequest(request => {
+    const url = new URL(request.url())
+    return request.isNavigationRequest() && url.hostname === 'accounts.google.com' && url.searchParams.has('redirect_uri') && url.searchParams.has('client_id')
+  })
   await google.focus()
   await page.keyboard.press('Enter')
+  const [bridge, authorization] = await Promise.all([bridgeRequest, googleRequest])
+  const bridgeURL = new URL(bridge.url())
+  const parameters = new URL(authorization.url()).searchParams
+  expect(bridgeURL.protocol).toBe('https:')
+  expect(parameters.get('redirect_uri')).toBe(new URL('/api/auth/callback/google', bridgeURL.origin).href)
+  expect(parameters.get('response_type')).toBe('code')
+  expect(parameters.get('scope')?.split(/\s+/).sort()).toEqual(['email', 'openid', 'profile'])
+  expect(parameters.get('prompt')).toBe('select_account')
+  expect(parameters.get('code_challenge_method')).toBe('S256')
+  // Only assert lengths so failed tests never print state, nonce or PKCE values.
+  expect(parameters.get('code_challenge')?.length ?? 0).toBeGreaterThanOrEqual(43)
+  expect(parameters.get('state')?.length ?? 0).toBeGreaterThan(0)
+  expect(parameters.get('nonce')?.length ?? 0).toBeGreaterThan(0)
+  expect(parameters.has('code_verifier')).toBe(false)
   await expect(page).toHaveURL(url => url.hostname === 'accounts.google.com')
-  await expect(page.getByText('Google OAuth reached', { exact: true })).toBeVisible()
 })
 
 test('a new room pairing link does not reuse another room or legacy controller token', async ({ page }) => {
