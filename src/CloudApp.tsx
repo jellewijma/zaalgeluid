@@ -187,9 +187,24 @@ function AccountControls({ onPasswordChanged }: { onPasswordChanged: () => void 
     <details><summary>Wachtwoord wijzigen</summary>
       <form onSubmit={event => void submit(event)}>
         <p className="account-help">Gebruik 12 tot 200 tekens. Je wordt daarna op alle apparaten afgemeld en de audio stopt.</p>
-        <div className="account-field"><label htmlFor="current-password">Huidig wachtwoord</label><Input id="current-password" type="password" autoComplete="current-password" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} required maxLength={200} disabled={busy} /></div>
-        <div className="account-field"><label htmlFor="new-password">Nieuw wachtwoord</label><Input id="new-password" type="password" autoComplete="new-password" value={newPassword} onChange={event => setNewPassword(event.target.value)} required minLength={12} maxLength={200} disabled={busy} /></div>
-        <div className="account-field"><label htmlFor="confirm-password">Herhaal nieuw wachtwoord</label><Input id="confirm-password" type="password" autoComplete="new-password" value={confirmation} onChange={event => setConfirmation(event.target.value)} required minLength={12} maxLength={200} disabled={busy} /></div>
+        <div className="account-field">
+          <label htmlFor="current-password">Huidig wachtwoord</label>
+          <Input id="current-password" type="password" autoComplete="current-password"
+            value={currentPassword} onChange={event => setCurrentPassword(event.target.value)}
+            required maxLength={200} disabled={busy} />
+        </div>
+        <div className="account-field">
+          <label htmlFor="new-password">Nieuw wachtwoord</label>
+          <Input id="new-password" type="password" autoComplete="new-password"
+            value={newPassword} onChange={event => setNewPassword(event.target.value)}
+            required minLength={12} maxLength={200} disabled={busy} />
+        </div>
+        <div className="account-field">
+          <label htmlFor="confirm-password">Herhaal nieuw wachtwoord</label>
+          <Input id="confirm-password" type="password" autoComplete="new-password"
+            value={confirmation} onChange={event => setConfirmation(event.target.value)}
+            required minLength={12} maxLength={200} disabled={busy} />
+        </div>
         <Button type="submit" variant="outline" disabled={busy}>{busy ? <LoaderCircle className="spin" /> : <KeyRound />} Wachtwoord wijzigen</Button>
       </form>
     </details>
