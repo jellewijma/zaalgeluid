@@ -9,6 +9,7 @@ export interface CloudRoomState extends RoomState {
 }
 
 export interface CloudSetup {
+  roomId: string;
   pin: string;
   pinExpiresAt: number;
   playerClientId: string | null;

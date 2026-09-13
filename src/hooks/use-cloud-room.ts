@@ -210,8 +210,14 @@ export function useCloudRoom({ role, token, onInvalidSession }: {
     if (!live.current.connected || !live.current.claimed) { setError('Wacht tot deze pc met de afspeler is verbonden.'); return }
     setError(null)
     // Synchronous call in the user gesture unlocks both media elements.
-    await engineRef.current?.enable()
-  }, [])
+    const engine = engineRef.current
+    await engine?.enable()
+    if (!engine || engineRef.current !== engine || !live.current.connected || !live.current.claimed) return
+    // Publish activation immediately: the server validates every play command
+    // against this state, so waiting for telemetry leaves a quick-click race.
+    try { await reportPlayback({ clientId, playback: engine.getSnapshot(), ackSequence: live.current.ack }) }
+    catch (cause) { if (!live.current.disposed) setError(message(cause)) }
+  }, [clientId, reportPlayback])
   const refreshPin = useCallback(async () => {
     if (!live.current.connected || !live.current.claimed) return
     try { await rotatePin({ clientId, pin: newPin() }); setError(null) }
@@ -222,8 +228,17 @@ export function useCloudRoom({ role, token, onInvalidSession }: {
   const state: RoomState = serverState ? {
     ...serverState,
     playerOnline: serverState.playerClientId !== null && serverState.leaseUntil > now + clockOffset,
-    playback: role === 'player' && claimed ? localPlayback : serverState.playback,
+    playback: role === 'player' && claimed ? {
+      ...localPlayback,
+      // Keep transport controls disabled until this PC's activation is also
+      // visible to the server that accepts commands from the PC and tablets.
+      ready: localPlayback.ready && serverState.playerClientId === clientId && serverState.playback.ready,
+    } : serverState.playback,
   } : emptyRoom
-  const setup = serverSetup ? { ...serverSetup, token: '', urls: [location.origin + appPath('/control')] } : null
+  const setup = serverSetup ? {
+    ...serverSetup,
+    token: '',
+    urls: [`${location.origin}${appPath('/control')}?room=${encodeURIComponent(serverSetup.roomId)}`],
+  } : null
   return { state, connection, command, enable, error, clearError: () => setError(null), setup, takeover: () => claim(true), refreshPin }
 }

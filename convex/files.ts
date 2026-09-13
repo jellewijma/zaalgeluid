@@ -66,7 +66,7 @@ export const remove = ownerMutation({
     const id = ctx.db.normalizeId("media", trackId);
     const file = id ? await ctx.db.get(id) : null;
     if (!file || file.ownerId !== ctx.owner._id) throw new Error("Geen toegang tot dit bestand.");
-    const room = await getRoom(ctx);
+    const room = await getRoom(ctx, ctx.owner._id);
     if (room && room.ownerId === ctx.owner._id) {
       if (room.playback.trackId === trackId || room.playback.effectTrackId === trackId || room.playback.queue.includes(trackId)) {
         throw new Error("Verwijder dit bestand eerst uit de speler en de wachtrij.");

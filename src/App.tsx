@@ -140,18 +140,19 @@ export function Home({ cloud = false }: { cloud?: boolean }) {
           <Link2 size={17} /> {cloud ? "Meld je aan op de pc. Koppel je tablet met de code op het scherm." : "Verbind beide apparaten met hetzelfde netwerk."}
         </p>
       </main>
-      <Footer />
+      <Footer cloud={cloud} />
     </>
   );
 }
 
-export function Footer() {
+export function Footer({ cloud = false }: { cloud?: boolean }) {
   return (
     <footer className="footer page-width">
       <span>
         <AudioLines size={14} /> Zaalgeluid
       </span>
       <span>Audio op de pc. Bediening in de zaal.</span>
+      {cloud && <a href={appPath("/privacy")}>Privacy</a>}
     </footer>
   );
 }
@@ -438,8 +439,8 @@ export function PlayerConsole({
             </p>
           </div>
           <div className="player-heading-actions">
-            <Button variant="outline" asChild>
-              <a href={appPath("/control")} target="_blank" rel="noreferrer">
+            <Button variant="outline" asChild disabled={cloud && !setup}>
+              <a href={cloud ? setup?.urls[0] : appPath("/control")} aria-disabled={cloud && !setup} target="_blank" rel="noreferrer">
                 <Smartphone /> Bediening openen <ArrowUpRight />
               </a>
             </Button>

@@ -4,6 +4,7 @@ import schema from "../convex/schema";
 import { api, internal } from "../convex/_generated/api";
 import { initialPlayback } from "../shared/protocol";
 import { PLAYER_LEASE_MS, PAIRING_PIN_MS } from "../shared/cloud-protocol";
+import { createAuthUser, googleConfigured, googleProfile, playerRedirect } from "../convex/auth_policy";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 const CLIENT = "player_abcdefghijklmnop";
@@ -19,6 +20,7 @@ async function fixture() {
   ]));
   const owner = t.withIdentity({ subject: `${ownerId}|owner-session` });
   const stranger = t.withIdentity({ subject: `${strangerId}|stranger-session` });
+  await t.run(ctx => ctx.db.insert("authAccounts", { userId: ownerId, provider: "password", providerAccountId: "jelle" }));
   await owner.mutation(api.rooms.claimPlayer, { sentAt: Date.now(), clientId: CLIENT, pin: PIN });
   const storageId = await t.run(ctx => ctx.storage.store(new Blob([new Uint8Array([1, 2, 3])], { type: "audio/mpeg" })));
   const music = await owner.mutation(api.files.finishUpload, { storageId, name: "Liedje", filename: "liedje.mp3", kind: "music" });
@@ -31,8 +33,126 @@ async function fixture() {
 beforeEach(() => {
   vi.stubEnv("OWNER_LOGIN", "jelle");
   vi.stubEnv("CONVEX_SITE_URL", "https://example.convex.site");
+  vi.stubEnv("SITE_URL", "https://jellewijma.com/play-audio");
+  vi.stubEnv("AUTH_GOOGLE_ID", "");
+  vi.stubEnv("AUTH_GOOGLE_SECRET", "");
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-09-13T12:00:00Z"));
+});
+
+async function googleUser(t: Awaited<ReturnType<typeof fixture>>["t"], subject: string, email: string) {
+  const userId = await t.run(async ctx => {
+    const userId = await createAuthUser(ctx, {
+      provider: { id: "google" }, existingUserId: null,
+      profile: googleProfile({ sub: subject, email, email_verified: true, name: subject }),
+    });
+    await ctx.db.insert("authAccounts", { userId, provider: "google", providerAccountId: subject, emailVerified: email });
+    return userId;
+  });
+  return { id: userId, client: t.withIdentity({ subject: `${userId}|google-session` }) };
+}
+
+describe("Google identity and private libraries", () => {
+  it("requires a configured provider and verified Google subject without exposing configuration values", async () => {
+    const { t } = await fixture();
+    expect(await t.query(api.account.authMethods, {})).toEqual({ google: false, password: true });
+    await expect(t.action(api.auth.signIn, { provider: "google", params: {} })).rejects.toThrow("google");
+    vi.stubEnv("AUTH_GOOGLE_ID", "example-client");
+    expect(googleConfigured()).toBe(false);
+    vi.stubEnv("AUTH_GOOGLE_SECRET", "example-secret");
+    expect(await t.query(api.account.authMethods, {})).toEqual({ google: true, password: true });
+    for (const bad of [
+      { sub: "subject", email: "person@gmail.com", email_verified: false },
+      { sub: "subject", email: "person@gmail.com", email_verified: "true" },
+      { sub: "", email: "person@gmail.com", email_verified: true },
+      { sub: "subject", email_verified: true },
+    ]) expect(() => googleProfile(bad)).toThrow("geverifieerd");
+    expect(googleProfile({ sub: "stable-subject", email: "Person@gmail.com", email_verified: true })).toEqual({
+      id: "stable-subject", email: "person@gmail.com", emailVerified: true,
+    });
+  });
+
+  it("rejects external and sibling-path OAuth redirects and preserves the application prefix once", () => {
+    for (const destination of ["/play-audio/player", "https://jellewijma.com/play-audio/player", "/play-audio/player?unused=1"]) {
+      expect(playerRedirect(destination)).toBe("https://jellewijma.com/play-audio/player");
+    }
+    for (const destination of ["//evil.example/play-audio/player", "https://jellewijma.com.evil.example/play-audio/player",
+      "https://user@jellewijma.com/play-audio/player", "/play-audio-other/player", "/player", "javascript:alert(1)",
+      "/play-audio/../player", "https://evil.example/play-audio/player"]) {
+      expect(() => playerRedirect(destination)).toThrow("aanmeldbestemming");
+    }
+    vi.stubEnv("SITE_URL", "http://localhost:3179/play-audio/");
+    expect(playerRedirect("/play-audio/player")).toBe("http://localhost:3179/play-audio/player");
+  });
+
+  it("keeps legacy IDs and access intact, never merges by email, and rejects unauthenticated or unverified users", async () => {
+    const { t, owner, ownerId, stranger, music } = await fixture();
+    expect(await t.query(api.account.current, {})).toBeNull();
+    expect(await stranger.query(api.account.current, {})).toBeNull();
+    expect(await owner.query(api.account.current, {})).toEqual({ name: "jelle", email: "jelle", canChangePassword: true });
+    const first = await googleUser(t, "google-first-subject", "jelle");
+    const second = await googleUser(t, "google-second-subject", "jelle");
+    expect(first.id).not.toBe(ownerId);
+    expect(second.id).not.toBe(first.id);
+    expect(await first.client.query(api.files.list, {})).toEqual([]);
+    expect((await owner.query(api.files.list, {}))[0].id).toBe(music.id);
+    expect((await first.client.query(api.account.current, {}))?.canChangePassword).toBe(false);
+    await expect(first.client.action(api.account.changePassword, { currentPassword: "anything", newPassword: "sufficient-password" })).rejects.toThrow("beheerder");
+    const updated = await t.run(ctx => createAuthUser(ctx, {
+      provider: { id: "google" }, existingUserId: first.id,
+      profile: googleProfile({ sub: "google-first-subject", email: "changed@gmail.com", email_verified: true }),
+    }));
+    expect(updated).toBe(first.id);
+    expect((await first.client.query(api.account.current, {}))?.email).toBe("changed@gmail.com");
+    const before = await t.run(ctx => ctx.db.query("users").take(20));
+    await expect(t.run(ctx => createAuthUser(ctx, { provider: { id: "google" }, existingUserId: null, profile: { email: "x@gmail.com", emailVerified: false } }))).rejects.toThrow("geverifieerd");
+    expect(await t.run(ctx => ctx.db.query("users").take(20))).toHaveLength(before.length);
+    const unverifiedId = await t.run(async ctx => {
+      const id = await ctx.db.insert("users", { email: "fake@gmail.com", emailVerificationTime: Date.now() });
+      await ctx.db.insert("authAccounts", { userId: id, provider: "google", providerAccountId: "unverified-subject" });
+      return id;
+    });
+    expect(await t.withIdentity({ subject: `${unverifiedId}|session` }).query(api.account.current, {})).toBeNull();
+  });
+
+  it("isolates two Google players, media and commands while keeping controller capabilities bound to their room", async () => {
+    const { t, owner } = await fixture();
+    const alice = await googleUser(t, "google-alice", "alice@gmail.com");
+    const bob = await googleUser(t, "google-bob", "bob@gmail.com");
+    const aliceRoom = await alice.client.mutation(api.rooms.claimPlayer, { clientId: CLIENT, pin: "246810", sentAt: Date.now() });
+    const bobRoom = await bob.client.mutation(api.rooms.claimPlayer, { clientId: CLIENT, pin: "246810", sentAt: Date.now() });
+    expect(aliceRoom.roomId).not.toBe(bobRoom.roomId);
+    expect((await alice.client.query(api.rooms.setup, {}))?.roomId).toBe(aliceRoom.roomId);
+    const storageId = await t.run(ctx => ctx.storage.store(new Blob(["alice song"], { type: "audio/mpeg" })));
+    const song = await alice.client.mutation(api.files.finishUpload, { storageId, name: "Alice", filename: "alice.mp3", kind: "music" });
+    expect(await bob.client.query(api.files.list, {})).toEqual([]);
+    expect(await bob.client.query(api.files.mediaUrls, {})).toEqual({});
+    await expect(bob.client.mutation(api.files.remove, { trackId: song.id })).rejects.toThrow("Geen toegang");
+    await expect(bob.client.mutation(api.files.finishUpload, { storageId, name: "Stolen", filename: "stolen.mp3", kind: "music" })).rejects.toThrow("Geen toegang");
+    await alice.client.mutation(api.rooms.reportPlayback, { clientId: CLIENT, playback: { ...initialPlayback, ready: true, trackId: song.id }, ackSequence: 0 });
+    await bob.client.mutation(api.rooms.reportPlayback, { clientId: CLIENT, playback: { ...initialPlayback, ready: true }, ackSequence: 0 });
+    await expect(bob.client.mutation(api.rooms.reportPlayback, { clientId: CLIENT, playback: { ...initialPlayback, ready: true, trackId: song.id }, ackSequence: 0 })).rejects.toThrow("deze bibliotheek");
+    await expect(bob.client.mutation(api.rooms.sendCommand, { command: { action: "select", trackId: song.id }, sentAt: Date.now() })).rejects.toThrow("beschikbaar");
+    expect((await t.mutation(api.rooms.pair, { pin: "246810", token: TOKEN })).ok).toBe(false);
+    expect((await t.mutation(api.rooms.pair, { roomId: "invalid-room", pin: "246810", token: TOKEN })).ok).toBe(false);
+    expect((await t.mutation(api.rooms.pair, { roomId: aliceRoom.roomId, pin: "246810", token: TOKEN })).ok).toBe(true);
+    expect(await t.mutation(api.rooms.pair, { roomId: bobRoom.roomId, pin: "246810", token: TOKEN })).toMatchObject({
+      ok: false, error: expect.stringContaining("andere speler"),
+    });
+    expect((await bob.client.query(api.rooms.state, { token: TOKEN }))?.tracks.map(track => track.id)).toEqual([song.id]);
+    expect(await bob.client.query(api.rooms.state, { token: "invalid-token" })).toBeNull();
+    await expect(bob.client.mutation(api.rooms.sendCommand, { token: "invalid-token", command: { action: "stop" }, sentAt: Date.now() })).rejects.toThrow("Koppel");
+    await bob.client.mutation(api.rooms.sendCommand, { token: TOKEN, command: { action: "stop" }, sentAt: Date.now() });
+    expect(await bob.client.query(api.rooms.pendingCommands, { clientId: CLIENT, afterSequence: 0 })).toEqual([]);
+    expect(await alice.client.query(api.rooms.pendingCommands, { clientId: CLIENT, afterSequence: 0 })).toHaveLength(1);
+    await bob.client.mutation(api.rooms.revokeControllers, {});
+    expect(await t.query(api.rooms.state, { token: TOKEN })).not.toBeNull();
+    await alice.client.mutation(api.rooms.revokeControllers, {});
+    expect(await t.query(api.rooms.state, { token: TOKEN })).toBeNull();
+    await bob.client.mutation(api.rooms.claimPlayer, { clientId: OTHER_CLIENT, pin: "112233", sentAt: Date.now(), force: true });
+    expect((await alice.client.query(api.rooms.state, {}))?.playerClientId).toBe(CLIENT);
+    expect((await owner.query(api.rooms.state, {}))?.playerClientId).toBe(CLIENT);
+  });
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
 
@@ -63,7 +183,7 @@ describe("online audio access", () => {
     }
     await expect(t.action(api.auth.signIn, { provider: "password", params: { flow: "signIn", email: "someone-else", password: "long-enough-password" } })).rejects.toThrow("Aanmelden niet toegestaan");
     const accounts = await t.run(ctx => ctx.db.query("authAccounts").take(10));
-    expect(accounts).toHaveLength(0);
+    expect(accounts).toHaveLength(1);
   });
 
   it("persists the PIN lockout across failed calls, then recovers after five minutes", async () => {

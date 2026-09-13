@@ -27,6 +27,7 @@ export const trackValidator = v.object({
   createdAt: v.string(), kind: kindValidator,
 });
 export const setupValidator = v.object({
+  roomId: v.string(),
   pin: v.string(), pinExpiresAt: v.number(),
   playerClientId: v.union(v.string(), v.null()), leaseUntil: v.number(),
 });

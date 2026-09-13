@@ -51,6 +51,8 @@ async function media(page: Page) {
 async function login(page: Page) {
   await page.goto('player')
   await expect(page.getByRole('heading', { name: 'Meld je aan op de pc.' })).toBeVisible()
+  await expect(page.locator('.password-login')).toBeVisible()
+  if (!await page.getByLabel('Gebruikersnaam', { exact: true }).isVisible()) await page.getByText('Aanmelden met wachtwoord', { exact: true }).click()
   await page.getByLabel('Gebruikersnaam', { exact: true }).fill(username)
   // Avoid including the sensitive fill argument in an assertion failure.
   try { await page.getByLabel('Wachtwoord', { exact: true }).fill(password!) }
@@ -97,7 +99,11 @@ test('online login, stored audio, tablet queue/effects and explicit second-PC ta
     const recover = first.getByRole('button', { name: 'Afspeler overnemen', exact: true })
     if (await recover.isVisible()) await recover.click()
     await expect(first.getByRole('button', { name: 'Audio activeren', exact: true })).toBeEnabled()
-    await expect(first.getByLabel('Adres voor de tablet', { exact: true })).toHaveValue(new URL('control', baseURL).href)
+    await expect(first.getByLabel('Adres voor de tablet', { exact: true })).toHaveValue(/\?room=.+/)
+    const controllerURL = new URL(await first.getByLabel('Adres voor de tablet', { exact: true }).inputValue())
+    expect(controllerURL.origin).toBe(new URL(baseURL).origin)
+    expect(controllerURL.pathname).toBe(new URL('control', baseURL).pathname)
+    expect(controllerURL.searchParams.get('room')).toBeTruthy()
     await first.getByRole('button', { name: 'Audio activeren', exact: true }).click()
     await expect(first.getByText('Afspeler verbonden en audio geactiveerd', { exact: true })).toBeVisible()
     await first.getByLabel('Audiobestanden toevoegen', { exact: true }).setInputFiles(songs.map(name => ({ name: `${name}.wav`, mimeType: 'audio/wav', buffer: audioFixture(30) })))
@@ -108,7 +114,7 @@ test('online login, stored audio, tablet queue/effects and explicit second-PC ta
     await first.getByRole('button', { name: 'Vernieuw code', exact: true }).click()
     await expect(first.locator('.pairing-code')).not.toHaveAttribute('aria-label', `Koppelcode ${initialPin}`)
     const pin = (await first.locator('.pairing-code').getAttribute('aria-label'))!.replace(/\D/g, '')
-    await tablet.goto('control')
+    await tablet.goto(controllerURL.href)
     await tablet.getByLabel('Koppelcode', { exact: true }).fill(initialPin)
     await tablet.getByRole('button', { name: 'Verbind met de afspeler', exact: true }).click()
     await expect(tablet.getByRole('alert')).toContainText('onjuist of verlopen')

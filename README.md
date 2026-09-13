@@ -6,18 +6,20 @@ Er zijn twee uitvoeringen: online via Vercel en Convex, en lokaal via de meegele
 
 ## Online gebruiken
 
-1. Open op de pc [jellewijma.com/play-audio/player](https://jellewijma.com/play-audio/player) en meld je aan met gebruikersnaam **jelle** en je eigen wachtwoord. Er is geen openbare registratie.
+1. Open op de pc [jellewijma.com/play-audio/player](https://jellewijma.com/play-audio/player) en kies **Doorgaan met Google**. Gebruik een Google-account met een geverifieerd e-mailadres. De knop verschijnt zodra Google-aanmelding voor die omgeving is ingericht. Voor het bestaande account blijft aanmelden met gebruikersnaam **jelle** en je eigen wachtwoord beschikbaar; nieuwe wachtwoordaccounts registreren is niet mogelijk.
 2. Kies de juiste Windows-audio-uitgang, controleer het PA-volume en klik op **Audio activeren**. Dit is na openen, verversen of overnemen opnieuw nodig.
 3. Voeg je liedjes en geluidseffecten toe. Bestanden worden in de online bibliotheek opgeslagen en blijven beschikbaar na afsluiten of opnieuw aanmelden.
-4. Scan op de tablet de QR-code, of open [jellewijma.com/play-audio/control](https://jellewijma.com/play-audio/control). Vul de zescijferige code van de pc in. Op de tablet is geen beheerderswachtwoord nodig.
+4. Scan op de tablet de persoonlijke QR-code van de pc, of open de daar getoonde koppellink. Die link bevat `?room=...` en kiest de juiste speler. Vul vervolgens de zescijferige code van de pc in. Op de tablet is geen Google-account of beheerderswachtwoord nodig. De oude algemene `/control`-link werkt alleen voor de bestaande bibliotheek van het wachtwoordaccount **jelle**.
+
+Ieder Google-account heeft een eigen bibliotheek, afspeellijst en speler. Een andere gebruiker kan jouw bestanden en speler niet benaderen met alleen zijn eigen aanmelding. De bestaande bibliotheek van **jelle** blijft bij het wachtwoordaccount: een Google-aanmelding koppelt of verplaatst deze gegevens niet automatisch, ook niet bij een overeenkomend e-mailadres. Gebruik voor de bestaande bestanden het bestaande wachtwoordaccount, of upload de gewenste bestanden in je afzonderlijke Google-bibliotheek.
 
 Beide apparaten hebben internet nodig; ze hoeven niet op hetzelfde netwerk te zitten. De koppelcode is tien minuten geldig. Vernieuw de code op de pc als die is verlopen. Een gekoppelde tablet kan maximaal twaalf uur bedienen; bij het sluiten van zijn browsersessie kan opnieuw koppelen nodig zijn. Je kunt alle tabletverbindingen op de pc verbreken. Na acht mislukte koppelpogingen geldt een wachttijd van vijf minuten.
 
-Er kan één pc tegelijk afspelen. Gebruik **Overnemen** als een andere pc of een ander tabblad nog als speler actief is. De vorige speler stopt zodra de overname is ontvangen. Bij een lange verbindingsuitval stopt de speler uiterlijk rond het verlopen van zijn verbinding van 45 seconden; daarna moet je de audio opnieuw activeren. Een korte uitval van de tablet onderbreekt de muziek op de pc niet. Bedieningsopdrachten zijn maximaal vijf seconden geldig en worden daarna niet alsnog uitgevoerd.
+Er kan per account één pc tegelijk afspelen. Gebruik **Overnemen** als een andere pc of een ander tabblad van hetzelfde account nog als speler actief is. De vorige speler stopt zodra de overname is ontvangen. Bij een lange verbindingsuitval stopt de speler uiterlijk rond het verlopen van zijn verbinding van 45 seconden; daarna moet je de audio opnieuw activeren. Een korte uitval van de tablet onderbreekt de muziek op de pc niet. Bedieningsopdrachten zijn maximaal vijf seconden geldig en worden daarna niet alsnog uitgevoerd.
 
 De online afspeellijst, selectie en volumes worden bewaard. Hervatten of overnemen start geen geluid vanzelf. Een actief geluidseffect wordt niet automatisch hervat. Houd het afspelertabblad open en voorkom dat de pc in slaapstand gaat.
 
-Via de accountbediening op de pc kun je je wachtwoord wijzigen. Je huidige wachtwoord is daarvoor nodig. Na een wijziging meld je je opnieuw aan met het nieuwe wachtwoord; andere beheerderssessies worden eveneens ingetrokken.
+Via de accountbediening op de pc kun je het wachtwoord van het bestaande wachtwoordaccount wijzigen. Je huidige wachtwoord is daarvoor nodig. Na een wijziging meld je je opnieuw aan met het nieuwe wachtwoord; andere sessies van dat account worden eveneens ingetrokken. Voor Google-accounts beheer je het wachtwoord bij Google; de app bewaart geen Google-wachtwoord.
 
 ## Lokaal beginnen op de pc
 
@@ -58,7 +60,7 @@ De tabletbediening past in één scherm, in liggende en staande tabletstand. De 
 | Muziekvolume / effectvolume | Regelt muziek en geluidseffecten afzonderlijk. Het Windows- en PA-volume blijven daarnaast van invloed. |
 | Tijdlijn | Verplaatst de afspeelpositie binnen het fragment. |
 
-Er kan één afspeler tegelijk actief zijn. Laat het afspelertabblad open en voorkom dat de pc in slaapstand gaat. Houd bij lokaal gebruik ook het servervenster open. De tablet heeft geen audiorechten nodig: alleen de afspeler op de pc maakt geluid.
+Er kan lokaal één afspeler, of online één afspeler per account, tegelijk actief zijn. Laat het afspelertabblad open en voorkom dat de pc in slaapstand gaat. Houd bij lokaal gebruik ook het servervenster open. De tablet heeft geen audiorechten nodig: alleen de afspeler op de pc maakt geluid.
 
 Voeg op de pc muziek en geluidseffecten toe aan hun eigen bibliotheek met **Liedjes toevoegen** en **Effecten toevoegen**. Je kunt meerdere bestanden tegelijk kiezen. Gebruik de **+** naast een liedje om het aan de afspeellijst toe te voegen; nogmaals klikken haalt het uit de lijst. De volgorde van toevoegen is de afspeelvolgorde. Het eerste toegevoegde liedje wordt klaargezet als er nog niets is geselecteerd. Open **Afspeellijst**, kies het gewenste startliedje en druk op **Afspelen**. Na afloop gaat de afspeler automatisch verder met het volgende liedje in die lijst. Aan het einde stopt de muziek: de lijst wordt niet herhaald. Geluidseffecten staan apart en kun je tijdens de muziek direct starten vanaf de pc of tablet.
 
@@ -70,13 +72,13 @@ Als de tablet de verbinding verliest, blijft het huidige fragment op de pc doors
 
 - Ondersteunde bestandstypen zijn MP3, WAV, OGG, M4A en FLAC, tot maximaal 500 MB per bestand. De gebruikte browser moet de codec in het bestand kunnen afspelen; de bestandsextensie alleen garandeert dit niet.
 - Bij lokaal gebruik staan uploads in `data/audio/`, de bibliotheek in `data/library.json` en de koppelcode in `data/settings.json`.
-- Online staan bestanden in Convex File Storage en de bibliotheek, afspeellijst en afspeelstatus in Convex. De online bibliotheek bevat maximaal 1000 bestanden. Uploads gaan rechtstreeks naar Convex en hoeven niet door een Vercel Function.
+- Online staan bestanden in Convex File Storage en de bibliotheek, afspeellijst en afspeelstatus in Convex. Elke accountbibliotheek bevat maximaal 1000 bestanden. Uploads gaan rechtstreeks naar Convex en hoeven niet door een Vercel Function.
 - Beide bibliotheken blijven bestaan wanneer je de app afsluit of de pc opnieuw opstart. Ze worden niet automatisch onderling gesynchroniseerd. Wil je lokale bestanden online gebruiken, upload dan de gewenste bestanden via de online afspeler.
 - Bestaande fragmenten zonder categorie blijven bewaard en worden als muziek weergegeven.
 - Maak voor een lokale reservekopie een kopie van de map `data/` terwijl de app is afgesloten. Een lokale reservekopie bevat geen online gegevens; maak daarvoor een export van de juiste Convex-deployment inclusief bestandsopslag.
 - Alleen de lokale uitvoering houdt audio, instellingen en opdrachten volledig binnen je pc en lokale netwerk. Online gebruikt de app Vercel voor de interface en Convex voor aanmelden, opslag en communicatie.
 
-Online kunnen alleen aangemelde beheerders bestanden uploaden, verwijderen en media-URL's ophalen. Gekoppelde tablets ontvangen bestandsnamen en status, geen media-URL's. Een gekopieerde directe Convex-media-URL blijft wel bruikbaar zonder opnieuw aanmelden totdat het bestand wordt verwijderd; deel die URL's dus alleen wanneer je ook het bestand wilt delen. Zie [Convex: bestanden aanbieden](https://docs.convex.dev/file-storage/serve-files).
+Online kan iedere aangemelde gebruiker alleen zijn eigen bestanden uploaden, verwijderen en media-URL's ophalen. Gekoppelde tablets ontvangen de bestandsnamen en status van hun gekoppelde speler, geen media-URL's. Een gekopieerde directe Convex-media-URL blijft wel bruikbaar zonder opnieuw aanmelden totdat het bestand wordt verwijderd; deel die URL's dus alleen wanneer je ook het bestand wilt delen. Zie [Convex: bestanden aanbieden](https://docs.convex.dev/file-storage/serve-files).
 
 Om een liedje te verwijderen, haal je het eerst uit de afspeellijst. Is het ook geselecteerd, stop dan het afspelen en klik op de pc op **Selectie wissen**. Stop een geselecteerd geluidseffect met **Effect stoppen**. Daarna kun je het bestand uit de bibliotheek verwijderen; je bevestigt de verwijdering voordat het bestand wordt gewist. **Selectie wissen** is beschikbaar wanneer het liedje niet wordt afgespeeld en niet wordt geladen, en verwijdert op zichzelf geen bestand.
 
@@ -149,14 +151,16 @@ Gebruik afzonderlijke Convex-deployments voor ontwikkeling en productie. Account
 | Vite/Vercel build | `VITE_CONVEX_URL` | De HTTPS `.convex.cloud`-URL van de bijbehorende deployment. Dit is een openbaar adres, geen geheim. |
 | Vite/Vercel build | `APP_BASE_PATH` | `/play-audio`. |
 | Lokale Convex CLI | `CONVEX_DEPLOYMENT` | De geselecteerde ontwikkeldeployment; de CLI beheert dit doorgaans in `.env.local`. |
-| Convex | `OWNER_LOGIN` | `jelle`; alleen dit account kan als beheerder aanmelden. |
+| Convex | `OWNER_LOGIN` | `jelle`; gebruikersnaam van het bestaande, gesloten wachtwoordaccount. Google-gebruikers hebben afzonderlijke accounts. |
 | Convex | `SITE_URL` | Publiek app-adres, voor productie `https://jellewijma.com/play-audio`. |
+| Convex | `AUTH_GOOGLE_ID` | Google OAuth-client-ID voor de betreffende omgeving. Alleen serverconfiguratie. |
+| Convex | `AUTH_GOOGLE_SECRET` | Bijbehorend geheim van de Google OAuth-client. Nooit een `VITE_`-variabele. |
 | Convex | `JWT_PRIVATE_KEY` | Geheime aanmeldsleutel, afzonderlijk genereren voor dev en productie. |
 | Convex | `JWKS` | De publieke verificatiesleutels die bij `JWT_PRIVATE_KEY` horen. |
 | Convex, automatisch | `CONVEX_SITE_URL` | Het `.convex.site`-adres; gebruikt door `convex/auth.config.ts`. |
 | Alleen een eventuele CI-deploy | `CONVEX_DEPLOY_KEY` | Geheime deploymentsleutel, nooit een `VITE_`-variabele of onderdeel van de browserbuild. |
 
-Bewaar secrets buiten Git. `.env*`, `.checks/` en `.vercel/` worden genegeerd. Publiceer de privésleutel, het wachtwoord en deploymenttokens niet in documentatie of buildlogs.
+Bewaar secrets buiten Git. `.env*`, `.checks/` en `.vercel/` worden genegeerd. Publiceer de privésleutel, het wachtwoord, Google-clientgeheim en deploymenttokens niet in documentatie of buildlogs. Google-aanmelding is alleen geregistreerd wanneer zowel `AUTH_GOOGLE_ID` als `AUTH_GOOGLE_SECRET` in Convex zijn ingesteld. De openbare query `account:authMethods` geeft alleen aan welke aanmeldmethodes zijn geconfigureerd, zonder waarden prijs te geven.
 
 ### Ontwikkeling
 
@@ -169,7 +173,7 @@ npx.cmd convex env set OWNER_LOGIN jelle
 npx.cmd convex env set SITE_URL http://localhost:3000/play-audio
 ```
 
-Richt bij een **nieuwe** deployment Convex Auth in, inclusief de twee sleutels. De bestaande bestanden `convex/auth.ts`, `convex/auth.config.ts` en `convex/http.ts` bevatten al de vereiste koppeling en de gesloten registratie. De Auth-installatiehulp kan de deploymentsleutels instellen:
+Richt bij een **nieuwe** deployment Convex Auth in, inclusief de twee sleutels. De bestaande bestanden `convex/auth.ts`, `convex/auth.config.ts` en `convex/http.ts` bevatten al de vereiste koppeling en de gesloten wachtwoordregistratie. De Auth-installatiehulp kan de deploymentsleutels instellen:
 
 ```powershell
 npx.cmd @convex-dev/auth --web-server-url http://localhost:3000/play-audio
@@ -190,16 +194,35 @@ Open `http://localhost:3000/play-audio/player`. Laat voor verdere backendwijzigi
 
 ### Productie op Vercel
 
-1. Stel `OWNER_LOGIN`, `SITE_URL`, `JWT_PRIVATE_KEY` en `JWKS` ook op de **productiedeployment** in. Gebruik bij Convex-omgevingscommando's `--prod`, bijvoorbeeld `npx.cmd convex env set OWNER_LOGIN jelle --prod` en `npx.cmd convex env set SITE_URL https://jellewijma.com/play-audio --prod`. De Auth-installatiehulp ondersteunt eveneens `--prod`; ontwikkelsleutels worden niet automatisch overgenomen.
+1. Stel `OWNER_LOGIN`, `SITE_URL`, `JWT_PRIVATE_KEY`, `JWKS`, `AUTH_GOOGLE_ID` en `AUTH_GOOGLE_SECRET` ook op de **productiedeployment** in. Gebruik bij Convex-omgevingscommando's `--prod`, bijvoorbeeld `npx.cmd convex env set OWNER_LOGIN jelle --prod` en `npx.cmd convex env set SITE_URL https://jellewijma.com/play-audio --prod`. Gebruik de productieclient van Google, met de productiecallback uit de Google-instructies hieronder. De Auth-installatiehulp ondersteunt eveneens `--prod`; ontwikkelsleutels worden niet automatisch overgenomen.
 2. Voer de controles hieronder uit en publiceer de backend met `npx.cmd convex deploy`. De CLI toont de deployment waarop de wijziging wordt toegepast.
 3. Configureer in het audio-project op Vercel de drie buildvariabelen: `VITE_APP_MODE=cloud`, `VITE_CONVEX_URL` met de productie-URL en `APP_BASE_PATH=/play-audio`. `vercel.json` gebruikt Vite, `npm run build` en uitvoermap `dist`. Werk bij een andere Convex-deployment ook de toegestane HTTPS/WSS-adressen in de Content Security Policy van `vercel.json` bij.
 4. Bouw/publiceer het audio-project en controleer eerst zijn eigen Vercel-adres: aanmelden, meerdere uploads, muziek, effecten, tabletbediening en herladen met behoud van de afspeellijst. Productie en previews moeten bewust aan de juiste Convex-deployment gekoppeld zijn.
 5. De bestaande portfolio op `jellewijma.com` routeert uitsluitend `/play-audio` en `/play-audio/:path*` door naar het audio-project, met behoud van het voorvoegsel. DNS kan geen afzonderlijk URL-pad toewijzen. Laat de audio-app zijn eigen beveiligingsheaders leveren en controleer dat de portfolio-overige routes blijven werken. Zie [Vercel rewrites](https://vercel.com/docs/routing/rewrites).
 6. Controleer het hele gebruikspad opnieuw via `https://jellewijma.com/play-audio`, inclusief de directe `/player`- en `/control`-links, assets, aanmelding, upload en afspelen.
 
+### Google-aanmelding inrichten
+
+Gebruik een afzonderlijk Google Cloud-project met een OAuth-client van type **Web application** voor ontwikkeling en voor productie. De productieclient bevat alleen productieadressen. Stel de Google Auth Platform-audience in op **External** wanneer mensen met hun eigen Google-account moeten kunnen aanmelden. Voeg tijdens ontwikkeling testgebruikers toe; publiceer de productie-app voor het externe publiek wanneer de inrichting gereed is. Controleer de appnaam, contactgegevens en vereiste openbare app- en privacypagina's in Google Auth Platform. Zie [Google: OAuth voorbereiden voor productie](https://developers.google.com/identity/protocols/oauth2/production-readiness/policy-compliance).
+
+De openbare homepage is `https://jellewijma.com/play-audio`; de privacy-URL voor Google Branding is `https://jellewijma.com/play-audio/privacy`. De privacypagina werkt zonder aanmelding en zonder Convex-verbinding, en is vanaf de homepage en het aanmeldscherm bereikbaar. Ze beschrijft de opgeslagen profiel- en audiogegevens, browseropslag, betrokken diensten en het contactadres voor verwijderingsverzoeken.
+
+De callback loopt rechtstreeks via Convex HTTP Actions. Vul bij **Authorized redirect URIs** exact het adres van de bijbehorende omgeving in:
+
+| Omgeving | Authorized redirect URI |
+| --- | --- |
+| Ontwikkeling | `https://fortunate-bass-968.eu-west-1.convex.site/api/auth/callback/google` |
+| Productie | `https://dependable-lynx-178.eu-west-1.convex.site/api/auth/callback/google` |
+
+Gebruik bij **Authorized JavaScript origins** de frontend-origin zonder pad: `https://jellewijma.com` voor productie en de gebruikte lokale origin voor ontwikkeling, bijvoorbeeld `http://localhost:3000` of `http://localhost:4173`. De `/play-audio`-prefix hoort niet in de Google-callback of JavaScript-origin. Zie [Convex Auth: Google configureren](https://labs.convex.dev/auth/config/oauth/google).
+
+Stel de client-ID in als `AUTH_GOOGLE_ID` en het clientgeheim als `AUTH_GOOGLE_SECRET` op de bijbehorende **Convex**-deployment in, via het dashboard of `convex env set --from-file` met een privébestand. Gebruik `--prod` voor de productieomgeving. Zet deze waarden niet in Vercel-buildvariabelen of frontendcode. De app vraagt uitsluitend `openid profile email` aan en toont de Google-accountkeuze. Alleen een geverifieerd e-mailadres wordt geaccepteerd; het onveranderlijke Google-accountnummer bepaalt bij volgende aanmeldingen welk app-account wordt gebruikt.
+
+Stel `SITE_URL` op het volledige frontend-adres inclusief het app-pad in: productie `https://jellewijma.com/play-audio`, ontwikkeling bijvoorbeeld `http://localhost:4173/play-audio`. De frontend geeft een **absolute** terugkeer-URL door, bijvoorbeeld `https://jellewijma.com/play-audio/player`. `convex/auth_policy.ts` staat uitsluitend de `/player`-pagina onder de geconfigureerde origin en het app-pad toe. Daardoor verdubbelt `/play-audio` niet en kan de aanmelding niet naar een andere website worden doorgestuurd. Test Google-aanmelding op dezelfde origin als `SITE_URL`; de hoofdsite en een losse Vercel-preview zijn verschillende origins.
+
 ### Beheerdersaccount aanmaken of herstellen
 
-Openbare registratie en openbare wachtwoordreset zijn uitgeschakeld. Op een nieuwe deployment maakt een Convex-beheerder het account één keer aan via de **interne** action `account:bootstrapOwner`, met argument `{ "password": "<nieuw wachtwoord>" }`. De gebruikersnaam komt uit `OWNER_LOGIN`. De action weigert een bestaand account te overschrijven.
+Openbare wachtwoordregistratie en openbare wachtwoordreset zijn uitgeschakeld; Google-gebruikers krijgen bij hun eerste geslaagde aanmelding wel een eigen account. Op een nieuwe deployment maakt een Convex-beheerder het bestaande type wachtwoordaccount één keer aan via de **interne** action `account:bootstrapOwner`, met argument `{ "password": "<nieuw wachtwoord>" }`. De gebruikersnaam komt uit `OWNER_LOGIN`. De action weigert een bestaand account te overschrijven.
 
 Voor herstel voert een Convex-beheerder de interne action `account:resetOwner` uit met hetzelfde argumentschema. Dat wijzigt het wachtwoord en trekt alle bestaande beheerderssessies in; bestanden en afspeellijst blijven behouden. Gebruik een uniek wachtwoord van 12 tot 200 tekens en voer het via een privé-invoermethode of de bevoegde Convex-dashboardinterface in. Zet het echte wachtwoord niet in een vast CLI-commando, shellgeschiedenis of Git-bestand. Controleer vóór uitvoering expliciet of dev of productie is geselecteerd. Voor een gewone wijziging gebruikt de eigenaar de wachtwoordfunctie in de app.
 
@@ -220,7 +243,7 @@ Lokaal levert de Node-server de interface en audiobestanden vanaf hetzelfde adre
 | `shared/cloud-protocol.ts` | Online statusvelden en geldigheidsduren. |
 | `convex/rooms.ts` | Afspelerregistratie, koppelcodes, tabletmachtigingen en opdrachten. |
 | `convex/files.ts` | Bibliotheek, directe uploads, media-URL's en veilig verwijderen. |
-| `convex/auth.ts` / `convex/account.ts` | Gesloten beheerdersaanmelding, initialisatie en wachtwoordbeheer. |
+| `convex/auth.ts` / `convex/auth_policy.ts` / `convex/account.ts` | Google-aanmelding, geverifieerde profielen, veilige terugkeer-URL, bestaand wachtwoordaccount en accountinformatie. |
 | `convex/cleanup.ts` / `convex/crons.ts` | Opruimen van verlopen opdrachten, koppelingen en onafgemaakte uploads. |
 | `vercel.json` | Statische online hosting, routes en beveiligingsheaders. |
 
@@ -238,6 +261,6 @@ De browsercontroles gebruiken via Playwright de geïnstalleerde Google Chrome al
 
 De lokale browsercontroles starten zelf testservers op poort 3107 of een vrije lokale poort en gebruiken aparte tijdelijke datamappen van het besturingssysteem. Ze wijzigen de normale bibliotheek onder `data/` niet. Bouw daarvoor eerst de lokale uitvoering met `VITE_APP_MODE=local` en `npm.cmd run build`; voor testen tegen de ontwikkelserver kun je `$env:E2E_DEV = "1"` instellen. De controle voor `/play-audio` gebruikt altijd een ontwikkelserver met dat voorvoegsel.
 
-`test:cloud` controleert de Convex-functies in een geïsoleerde testomgeving, inclusief toegang, gesloten registratie, verlopen koppelingen/opdrachten, overnemen en bestandsbescherming. Deze tests wijzigen geen ontwikkel- of productiegegevens. Controleer online daarnaast met twee echte browsersessies de route van aanmelden en uploaden tot afspelen en tabletbediening; uitsluitend een geslaagde build bewijst die verbinding niet.
+`test:cloud` controleert de Convex-functies in een geïsoleerde testomgeving, inclusief Google-profielen, veilige OAuth-terugkeer, gescheiden bibliotheken/spelers, behoud van het wachtwoordaccount, gesloten wachtwoordregistratie, verlopen koppelingen/opdrachten, overnemen en bestandsbescherming. Deze tests wijzigen geen ontwikkel- of productiegegevens. Controleer online daarnaast met twee echte browsersessies de route van Google-aanmelden en uploaden tot afspelen en tabletbediening; uitsluitend een geslaagde build bewijst die verbinding niet.
 
 Gebruik voor een repetitie ook de daadwerkelijke pc, tablet en PA-aansluiting om netwerkbereik en geluidsniveau te controleren.

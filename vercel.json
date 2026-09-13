@@ -9,9 +9,11 @@
   "rewrites": [
     { "source": "/play-audio/assets/:path*", "destination": "/assets/:path*" },
     { "source": "/play-audio/favicon.svg", "destination": "/favicon.svg" },
+    { "source": "/play-audio/google-g.png", "destination": "/google-g.png" },
     { "source": "/play-audio", "destination": "/index.html" },
     { "source": "/play-audio/", "destination": "/index.html" },
     { "source": "/play-audio/player", "destination": "/index.html" },
+    { "source": "/play-audio/privacy", "destination": "/index.html" },
     { "source": "/play-audio/control", "destination": "/index.html" }
   ],
   "headers": [
