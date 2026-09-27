@@ -154,7 +154,7 @@ test('guests have private persistent audio and tablet control, and confirm losin
     await player.getByRole('button', { name: `${song} klaarzetten`, exact: true }).click()
     await tablet.getByRole('button', { name: 'Afspelen', exact: true }).tap()
     await expect.poll(async () => (await media(player))[0]?.time).toBeGreaterThan(0.1)
-    await tablet.getByRole('tab', { name: 'Geluidseffecten', exact: true }).tap()
+    await expect(tablet.getByRole('region', { name: 'Geluidseffecten', exact: true })).toBeVisible()
     await tablet.getByRole('button', { name: `${effect} effect afspelen`, exact: true }).tap()
     await expect.poll(async () => (await media(player)).map(audio => audio.paused)).toEqual([false, false])
     await expect.poll(async () => (await media(player))[1]?.time).toBeGreaterThan(0.1)
