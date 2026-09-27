@@ -1,0 +1,17 @@
+{
+  "id": "./",
+  "name": "Zaalgeluid",
+  "short_name": "Zaalgeluid",
+  "description": "Speel liedjes en geluidseffecten af op je pc en bedien ze vanaf je tablet.",
+  "lang": "nl",
+  "start_url": "./launch?launch=app",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#111714",
+  "theme_color": "#111714",
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -6,6 +6,7 @@ import CloudApp from "./CloudApp";
 import { OAuthCallback } from "./components/oauth-callback";
 import { PrivacyPage } from "./components/privacy-page";
 import { appPath, appRoute } from "./lib/paths";
+import { initializePwa } from "./lib/pwa";
 import "./index.css";
 
 const cloud = import.meta.env.VITE_APP_MODE === "cloud";
@@ -17,7 +18,7 @@ if (cloud && convexUrl && !privacy) {
   catch { /* Show a usable error page below when the deployment URL is invalid. */ }
 }
 
-createRoot(document.getElementById("root")!).render(
+if (!initializePwa()) createRoot(document.getElementById("root")!).render(
   privacy ? <PrivacyPage /> : !cloud ? <App /> : convex ? (
     <ConvexAuthProvider client={convex} storageNamespace={`${convexUrl}${appPath("/")}`} shouldHandleCode={false}>
       <OAuthCallback><CloudApp /></OAuthCallback>

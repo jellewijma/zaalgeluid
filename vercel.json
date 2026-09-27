@@ -10,8 +10,12 @@
     { "source": "/play-audio/assets/:path*", "destination": "/assets/:path*" },
     { "source": "/play-audio/favicon.svg", "destination": "/favicon.svg" },
     { "source": "/play-audio/google-g.png", "destination": "/google-g.png" },
+    { "source": "/play-audio/manifest.webmanifest", "destination": "/manifest.webmanifest" },
+    { "source": "/play-audio/sw.js", "destination": "/sw.js" },
+    { "source": "/play-audio/icons/:path*", "destination": "/icons/:path*" },
     { "source": "/play-audio", "destination": "/index.html" },
     { "source": "/play-audio/", "destination": "/index.html" },
+    { "source": "/play-audio/launch", "destination": "/index.html" },
     { "source": "/play-audio/player", "destination": "/index.html" },
     { "source": "/play-audio/privacy", "destination": "/index.html" },
     { "source": "/play-audio/control", "destination": "/index.html" }
@@ -26,7 +30,15 @@
     { "source": "/play-audio/assets/:path*", "headers": [
       { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
     ] },
-    { "source": "/play-audio/:page(player|control)?", "headers": [
+    { "source": "/play-audio/manifest.webmanifest", "headers": [
+      { "key": "Content-Type", "value": "application/manifest+json" },
+      { "key": "Cache-Control", "value": "no-cache" }
+    ] },
+    { "source": "/play-audio/sw.js", "headers": [
+      { "key": "Content-Type", "value": "application/javascript; charset=utf-8" },
+      { "key": "Cache-Control", "value": "no-cache" }
+    ] },
+    { "source": "/play-audio/:page(player|control|launch)?", "headers": [
       { "key": "Cache-Control", "value": "no-store" }
     ] }
   ]

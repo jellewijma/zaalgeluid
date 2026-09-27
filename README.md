@@ -25,6 +25,16 @@ De online afspeellijst, selectie en volumes worden bewaard. Hervatten of overnem
 
 Via de accountbediening op de pc kun je het wachtwoord van het bestaande wachtwoordaccount wijzigen. Je huidige wachtwoord is daarvoor nodig. Na een wijziging meld je je opnieuw aan met het nieuwe wachtwoord; andere sessies van dat account worden eveneens ingetrokken. Voor Google-accounts beheer je het wachtwoord bij Google; de app bewaart geen Google-wachtwoord.
 
+## Installeren als app
+
+Open de online app via HTTPS op je tablet of pc. Kies in Chrome **Installeren** via het browsermenu; op een iPhone of iPad kies je in Safari **Deel → Zet op beginscherm**. Zaalgeluid krijgt een eigen pictogram en opent in een afzonderlijk venster. Op een tablet open je vóór installatie de persoonlijke tabletlink van de pc, zodat de app die speler onthoudt.
+
+Bij openen via het app-pictogram wordt de laatst geopende afspeler of tabletbediening op dit apparaat gebruikt, inclusief de speler uit de tabletlink. De startpagina blijft bereikbaar via het Zaalgeluid-logo. Alleen dit adres wordt onthouden; aanmelding en koppeling blijven nodig als hun sessie is verlopen of in een nieuw app-venster niet beschikbaar is.
+
+Installatie vereist een beveiligd adres: online **HTTPS**, of `http://localhost` op de server-pc. Een tabletadres zoals `http://192.168.1.100:3000` is niet beveiligd en kan daarom in Chrome niet als app worden geïnstalleerd; gebruik daar de online HTTPS-versie of blijf de lokale bediening in de browser gebruiken. Zie de [installatievoorwaarden van Chrome](https://web.dev/articles/install-criteria).
+
+De geïnstalleerde app heeft nog steeds een verbinding met de afspeler nodig. Er worden geen audiobestanden of accountgegevens voor offline gebruik gekopieerd. Bij openen zonder verbinding verschijnt **Geen verbinding**, met een koppeling om opnieuw te proberen. Updates worden bij opnieuw openen geladen en onderbreken geen lopende muziek met een automatische herlaadactie.
+
 ## Lokaal beginnen op de pc
 
 1. Installeer [Node.js](https://nodejs.org/) versie **22.12 of nieuwer** als die nog niet op de pc staat. Node.js 24 LTS is geschikt.
@@ -264,6 +274,8 @@ npm.cmd run test:browser
 De browsercontroles gebruiken via Playwright de geïnstalleerde Google Chrome als die op `C:/Program Files/Google/Chrome/Application/chrome.exe` staat. Anders gebruiken ze Playwright Chromium; installeer die zo nodig met `npx.cmd playwright install chromium`.
 
 De lokale browsercontroles starten zelf testservers op poort 3107 of een vrije lokale poort en gebruiken aparte tijdelijke datamappen van het besturingssysteem. Ze wijzigen de normale bibliotheek onder `data/` niet. Bouw daarvoor eerst de lokale uitvoering met `VITE_APP_MODE=local` en `npm.cmd run build`; voor testen tegen de ontwikkelserver kun je `$env:E2E_DEV = "1"` instellen. De controle voor `/play-audio` gebruikt altijd een ontwikkelserver met dat voorvoegsel.
+
+`tests/pwa.browser.spec.ts` gebruikt een productiebuild en controleert de installatievoorwaarden rechtstreeks in Chrome, inclusief pictogrammen, het startadres, tabletlinks en openen zonder verbinding. Gebruik voor deze test geen `E2E_DEV`. Voor controle van het online URL-pad bouw je met `APP_BASE_PATH=/play-audio` en voer je de test uit met `PWA_BASE_PATH=/play-audio`: `npm.cmd run test:browser -- tests/pwa.browser.spec.ts`. Bouw daarna opnieuw zonder voorvoegsel voordat je de volledige lokale browsersuite uitvoert.
 
 `test:cloud` controleert de Convex-functies in een geïsoleerde testomgeving, inclusief Google-profielen, veilige OAuth-terugkeer, gescheiden bibliotheken/spelers, behoud van het wachtwoordaccount, gesloten wachtwoordregistratie, verlopen koppelingen/opdrachten, overnemen en bestandsbescherming. Deze tests wijzigen geen ontwikkel- of productiegegevens. Controleer online daarnaast met twee echte browsersessies de route van Google-aanmelden en uploaden tot afspelen en tabletbediening; uitsluitend een geslaagde build bewijst die verbinding niet.
 
