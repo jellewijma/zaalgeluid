@@ -45,12 +45,12 @@ async function media(page: Page) {
 
 async function guestLogin(page: Page) {
   await page.goto('player')
-  await expect(page.getByRole('heading', { name: 'Meld je aan op de pc.', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Aanmelden', exact: true })).toBeVisible()
   const guest = page.getByRole('button', { name: 'Doorgaan als gast', exact: true })
   await expect(guest).toBeEnabled()
   await guest.focus()
   await page.keyboard.press('Enter')
-  await expect(page.getByRole('heading', { name: 'Klaar voor jouw moment.', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Afspeler', exact: true })).toBeVisible()
   await expect(page.getByText('Aangemeld als gast', { exact: true })).toBeVisible()
   await expect(page.getByText('Wachtwoord wijzigen', { exact: true })).toHaveCount(0)
   return controllerURL(page)
@@ -67,8 +67,8 @@ async function controllerURL(page: Page) {
 }
 
 async function expectEmptyLibrary(page: Page) {
-  await expect(page.getByRole('heading', { name: 'Jouw liedjes, hier bij elkaar.', exact: true })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Je effecten, direct onder de knop.', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Geen liedjes', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Geen geluidseffecten', exact: true })).toBeVisible()
   await expect(page.locator('.track-row')).toHaveCount(0)
 }
 
@@ -145,7 +145,7 @@ test('guests have private persistent audio and tablet control, and confirm losin
     const takeOver = player.getByRole('button', { name: 'Afspeler overnemen', exact: true })
     if (await takeOver.isVisible()) await takeOver.click()
     await player.getByRole('button', { name: 'Audio activeren', exact: true }).click()
-    await expect(player.getByText('Afspeler verbonden en audio geactiveerd', { exact: true })).toBeVisible()
+    await expect(player.getByRole('slider', { name: 'Muziekvolume', exact: true })).toBeEnabled()
     const pin = (await player.locator('.pairing-code').getAttribute('aria-label'))!.replace(/\D/g, '')
     await tablet.goto(firstRoom.href)
     await tablet.getByLabel('Koppelcode', { exact: true }).fill(pin)
@@ -194,7 +194,7 @@ test('guests have private persistent audio and tablet control, and confirm losin
     await expectEmptyLibrary(other)
     await player.getByRole('button', { name: 'Afmelden', exact: true }).click()
     await player.getByRole('alertdialog').getByRole('button', { name: 'Afmelden als gast', exact: true }).click()
-    await expect(player.getByRole('heading', { name: 'Meld je aan op de pc.', exact: true })).toBeVisible()
+    await expect(player.getByRole('heading', { name: 'Aanmelden', exact: true })).toBeVisible()
     const replacementRoom = await guestLogin(player)
     expect(replacementRoom.searchParams.get('room')).not.toBe(firstRoom.searchParams.get('room'))
     await expectEmptyLibrary(player)

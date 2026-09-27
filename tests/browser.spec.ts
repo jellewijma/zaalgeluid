@@ -137,7 +137,7 @@ async function activateAndUpload(player: Page, controller: Page, name: string, b
   const activate = player.getByRole('button', { name: 'Audio activeren', exact: true })
   await tabTo(player, activate)
   await player.keyboard.press('Enter')
-  await expect(player.getByText('Afspeler verbonden en audio geactiveerd', { exact: true })).toBeVisible()
+  await expect(player.getByRole('slider', { name: 'Muziekvolume', exact: true })).toBeEnabled()
   await player.getByLabel('Audiobestanden toevoegen').setInputFiles({ name: `${name}.wav`, mimeType: 'audio/wav', buffer })
   await chooseFragment(controller, name)
   await expect(player.getByRole('heading', { name, exact: true })).toBeVisible()
@@ -291,7 +291,7 @@ test('controller disconnect leaves playback running; player connection loss stop
       await expect(player.getByRole('button', { name: 'Audio activeren', exact: true })).toBeEnabled()
       expect((await media(player)).paused).toBe(true)
       await player.getByRole('button', { name: 'Audio activeren', exact: true }).click()
-      await expect(player.getByText('Afspeler verbonden en audio geactiveerd', { exact: true })).toBeVisible()
+      await expect(player.getByRole('slider', { name: 'Muziekvolume', exact: true })).toBeEnabled()
       expect((await media(player)).paused).toBe(true)
     } finally { await observerContext.close() }
   } finally { await pairSession.close() }
@@ -349,10 +349,10 @@ test('a fragment ends naturally and clearing its selection allows deletion', asy
     expect((await media(player)).ended).toBe(true)
     await expect(controller.getByRole('button', { name: 'Kort einde klaarzetten', exact: true })).toHaveAttribute('aria-pressed', 'true')
     await player.getByRole('button', { name: 'Selectie wissen', exact: true }).click()
-    await expect(player.getByRole('heading', { name: 'Nog even stil.', exact: true })).toBeVisible()
+    await expect(player.getByRole('heading', { name: 'Geen fragment geselecteerd', exact: true })).toBeVisible()
     expect((await media(player)).sourceAttribute).toBe(null)
     expect((await media(player)).paused).toBe(true)
-    await expect(player.getByText('Afspeler verbonden en audio geactiveerd', { exact: true })).toBeVisible()
+    await expect(player.getByRole('slider', { name: 'Muziekvolume', exact: true })).toBeEnabled()
     await player.getByRole('button', { name: 'Kort einde verwijderen', exact: true }).click()
     await player.getByRole('button', { name: 'Kort einde definitief verwijderen', exact: true }).click()
     await expect(controller.getByRole('button', { name: 'Kort einde klaarzetten', exact: true })).toHaveCount(0)
@@ -365,7 +365,7 @@ test('many fragments stay reachable by touch without scrolling or starting audio
   try {
     await controller.setViewportSize({ width: 1024, height: 600 })
     await player.getByRole('button', { name: 'Audio activeren', exact: true }).click()
-    await expect(player.getByText('Afspeler verbonden en audio geactiveerd', { exact: true })).toBeVisible()
+    await expect(player.getByRole('slider', { name: 'Muziekvolume', exact: true })).toBeEnabled()
     const uploaded = player.waitForResponse(response => new URL(response.url()).pathname === '/api/tracks' && response.request().method() === 'POST' && response.status() === 201)
     await player.getByLabel('Audiobestanden toevoegen').setInputFiles(Array.from({ length: 25 }, (_, index) => ({
       name: `Aanraakfragment ${String(index + 1).padStart(2, '0')}.wav`, mimeType: 'audio/wav', buffer: quietWav(10),

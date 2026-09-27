@@ -74,7 +74,7 @@ test('the complete player and controller flow stays below /play-audio', async ({
     expect(setupResult.status()).toBe(200)
     const setup = await setupResult.json() as Setup
     await player.getByRole('button', { name: 'Audio activeren', exact: true }).click()
-    await expect(player.getByText('Afspeler verbonden en audio geactiveerd', { exact: true })).toBeVisible()
+    await expect(player.getByRole('slider', { name: 'Muziekvolume', exact: true })).toBeEnabled()
 
     for (const [name, label] of [['Prefixlied', 'Audiobestanden toevoegen'], ['Prefixeffect', 'Geluidseffecten toevoegen']]) {
       const uploaded = player.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/play-audio/api/tracks')

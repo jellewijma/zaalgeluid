@@ -22,7 +22,6 @@ import {
   Play,
   Radio,
   RotateCcw,
-  ShieldCheck,
   Smartphone,
   Square,
   SkipBack,
@@ -65,14 +64,11 @@ export function Header({ connected, role, cloud = false }: { connected?: boolean
           <span className="brand-icon">
             <AudioLines size={23} />
           </span>
-          <span>
-            Zaalgeluid
-            <span className="brand-caption">JOUW AUDIO. JOUW ZAAL.</span>
-          </span>
+          <span>Zaalgeluid</span>
         </a>
         <div className="header-meta">
           <span className="local-label">
-            <ShieldCheck size={15} /> {cloud ? "Privé verbonden" : "Lokaal netwerk"}
+            {cloud ? "Online" : "Lokaal netwerk"}
           </span>
           {role && (
             <span className={cn("connection-tag", connected && "is-connected")}>
@@ -91,53 +87,29 @@ export function Home({ cloud = false }: { cloud?: boolean }) {
     <>
       <Header cloud={cloud} />
       <main className="welcome page-width">
-        <div className="eyebrow">VANAF DE ZAAL, RECHTSTREEKS NAAR DE PA</div>
-        <h1>
-          Het juiste geluid.
-          <br />
-          Op jouw moment.
-        </h1>
-        <p className="lead">
-          {cloud ? "Open de afspeler op de pc en bedien vanaf je tablet." : "Je pc speelt af. Jij bedient vanaf je tablet."}
-          <br />
-          {cloud ? "Jouw liedjes en effecten, altijd bij de hand." : "Alles blijft op je eigen netwerk."}
-        </p>
+        <h1>Afspeler en bediening</h1>
         <div className="role-options">
           <a className="role-option" href={appPath("/player")}>
             <span className="role-icon">
               <Monitor />
             </span>
             <div>
-              <h2>Deze pc speelt af</h2>
-              <p>
-                Verbind met de PA, voeg audio toe
-                <br />
-                en koppel je tablet.
-              </p>
+              <h2>Afspeler openen</h2>
+              <p>Op de pc die op de PA is aangesloten.</p>
             </div>
-            <span className="role-link">
-              Afspeler openen <ChevronRight size={18} />
-            </span>
           </a>
           <a className="role-option" href={appPath("/control")}>
             <span className="role-icon">
               <Smartphone />
             </span>
             <div>
-              <h2>Dit apparaat bedient</h2>
-              <p>
-                Start en stop fragmenten vanaf
-                <br />
-                elke plek in de zaal.
-              </p>
+              <h2>Bediening openen</h2>
+              <p>Op je tablet of telefoon.</p>
             </div>
-            <span className="role-link">
-              Bediening openen <ChevronRight size={18} />
-            </span>
           </a>
         </div>
         <p className="welcome-note">
-          <Link2 size={17} /> {cloud ? "Meld je aan op de pc. Koppel je tablet met de code op het scherm." : "Verbind beide apparaten met hetzelfde netwerk."}
+          {cloud ? "Koppel je tablet met de code op de pc." : "Verbind beide apparaten met hetzelfde netwerk."}
         </p>
       </main>
       <Footer cloud={cloud} />
@@ -146,13 +118,10 @@ export function Home({ cloud = false }: { cloud?: boolean }) {
 }
 
 export function Footer({ cloud = false }: { cloud?: boolean }) {
+  if (!cloud) return null;
   return (
     <footer className="footer page-width">
-      <span>
-        <AudioLines size={14} /> Zaalgeluid
-      </span>
-      <span>Audio op de pc. Bediening in de zaal.</span>
-      {cloud && <a href={appPath("/privacy")}>Privacy</a>}
+      <a href={appPath("/privacy")}>Privacy</a>
     </footer>
   );
 }
@@ -198,14 +167,9 @@ function Pairing({ onPaired }: { onPaired: (token: string) => void }) {
         <a href={appPath("/")} className="back-link">
           <ArrowLeft size={16} /> Terug
         </a>
-        <div className="pairing-icon">
-          <Smartphone size={30} />
-        </div>
-        <div className="eyebrow">BEDIENING KOPPELEN</div>
-        <h1>Neem de bediening over.</h1>
+        <h1>Tablet koppelen</h1>
         <p>
-          Vul de 6-cijferige koppelcode in die op het afspelerscherm van de pc
-          staat.
+          Vul de 6-cijferige code van de afspeler op de pc in.
         </p>
         <form onSubmit={pair}>
           <label htmlFor="pairing-code">Koppelcode</label>
@@ -400,9 +364,7 @@ export function PlayerConsole({
       ? "Open de afspeler op de PA-pc om te beginnen."
       : !state.playback.ready
         ? "Klik op de pc op ‘Audio activeren’ om de bediening vrij te geven."
-        : !current
-          ? "Kies hieronder een fragment om te beginnen."
-          : "";
+        : "";
   async function activate() {
     setActivating(true);
     try {
@@ -427,17 +389,7 @@ export function PlayerConsole({
       <Header connected={online} role="Afspeler" cloud={cloud} />
       <main className="page-width workspace">
         <div className="page-heading">
-          <div>
-            <div className="eyebrow">
-              AFSPELER · PA-PC
-            </div>
-            <h1>
-              Klaar voor jouw moment.
-            </h1>
-            <p>
-              Kies je liedjes, zet effecten klaar en bedien het geluid vanuit de zaal.
-            </p>
-          </div>
+          <h1>Afspeler</h1>
           <div className="player-heading-actions">
             <Button variant="outline" asChild disabled={cloud && !setup}>
               <a href={cloud ? setup?.urls[0] : appPath("/control")} aria-disabled={cloud && !setup} target="_blank" rel="noreferrer">
@@ -501,10 +453,7 @@ export function PlayerConsole({
                   <Headphones size={23} />
                 </div>
                 <div>
-                  <h2>Geef deze pc toestemming om af te spelen</h2>
-                  <p>
-                    Eenmalig activeren, daarna bedien je alles vanaf je tablet.
-                  </p>
+                  <p>Activeer audio na het openen of verversen van deze pagina.</p>
                 </div>
                 <Button
                   disabled={!online || activating}
@@ -545,33 +494,15 @@ export function PlayerConsole({
                 revokeControllers={revokeControllers}
               />}
               {account}
-              <section className="output-note">
-                <Headphones size={20} />
-                <div>
-                  <h3>Geluid via deze pc</h3>
-                  <p>
-                    Kies je PA of audio-interface als geluidsuitvoer in Windows.
-                    Houd deze pagina open en voorkom dat de pc in slaapstand
-                    gaat.
-                  </p>
-                </div>
-              </section>
+              <p className="output-note">
+                Kies de PA of audio-interface als geluidsuitvoer. Houd deze pagina open en voorkom
+                dat de pc in slaapstand gaat.
+              </p>
             </aside>
           )}
         </div>
-        <div className="workspace-bottom">
-          <span>
-            <span className={cn("status-dot", ready && "live")} />
-            {ready
-              ? "Afspeler verbonden en audio geactiveerd"
-              : "Afspeler nog niet gereed"}
-          </span>
-          <span>
-            <ShieldCheck size={14} /> {cloud ? "Privé verbonden met je account" : "Blijft op je lokale netwerk"}
-          </span>
-        </div>
       </main>
-      <Footer />
+      <Footer cloud={cloud} />
     </>
   );
 }
@@ -605,17 +536,13 @@ function Transport({
   return (
     <section className="transport panel" aria-label="Audiobediening">
       <div className="transport-top">
-        <span className="section-label">NU IN DE AFSPELER</span>
         <span className={cn("playback-status", playing && "playing")}>
           <span className={cn("status-dot", playing && "live")} />
           {!ready ? "Wacht op afspeler" : labels[playback.status]}
         </span>
       </div>
       <div className="track-display">
-        <span className={cn("track-art", playing && "active")}>
-          <AudioLines size={34} strokeWidth={1.4} />
-        </span>
-        <h2>{current?.name || "Nog even stil."}</h2>
+        <h2>{current?.name || "Geen fragment geselecteerd"}</h2>
         <p>
           {current
             ? current.filename
@@ -795,29 +722,11 @@ function ConnectionPanel({
     <section className="connection-panel panel">
       <div className="connection-title">
         <Smartphone size={20} />
-        <h2>Koppel je tablet</h2>
+        <h2>Tablet koppelen</h2>
       </div>
       <p className="connection-intro">
-        De bediening binnen handbereik.
-        <br />
-        In drie stappen verbonden.
+        Scan de QR-code of open dit adres op je tablet.
       </p>
-      <ol className="connection-steps">
-        <li>
-          <span>1</span>
-          <div>
-            <strong>{cloud ? "Verbind met internet" : "Hetzelfde netwerk"}</strong>
-            <p>{cloud ? "Zorg dat de pc en tablet online zijn." : "Verbind je tablet met de wifi van deze pc."}</p>
-          </div>
-        </li>
-        <li>
-          <span>2</span>
-          <div>
-            <strong>Open de bediening</strong>
-            <p>Scan de QR-code met je tablet.</p>
-          </div>
-        </li>
-      </ol>
       {activeUrl ? (
         <>
           <div className="qr-container">
@@ -866,15 +775,7 @@ function ConnectionPanel({
           netwerkkabel en vernieuw de pagina.
         </p>
       )}
-      <ol className="connection-steps last-step" start={3}>
-        <li>
-          <span>3</span>
-          <div>
-            <strong>Vul de koppelcode in</strong>
-            <p>Deze code verschijnt alleen op de pc.</p>
-          </div>
-        </li>
-      </ol>
+      <p className="pairing-code-label">Koppelcode</p>
       <div className="pairing-code" aria-label={`Koppelcode ${setup.pin}`}>
         <span>{setup.pin.slice(0, 3)}</span>
         <span>{setup.pin.slice(3)}</span>
@@ -886,6 +787,9 @@ function ConnectionPanel({
         </Button>
         {refreshError && <p className="error-note" role="alert">{refreshError}</p>}
       </div>}
+      <p className="connection-intro">
+        {cloud ? "Pc en tablet moeten internet hebben." : "Gebruik hetzelfde netwerk op pc en tablet."}
+      </p>
       <div className={cn("tablet-status", controllerCount > 0 && "connected")}>
         <span className={cn("status-dot", controllerCount > 0 && "live")} />
         {controllerCount > 0

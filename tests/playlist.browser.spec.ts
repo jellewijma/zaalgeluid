@@ -46,7 +46,7 @@ const test = base.extend<{ room: { player: Page; controller: Page } }>({
       const setup = await setupResponse.json() as Setup
       await player.goto('/player')
       await player.getByRole('button', { name: 'Audio activeren', exact: true }).click()
-      await expect(player.getByText('Afspeler verbonden en audio geactiveerd', { exact: true })).toBeVisible()
+      await expect(player.getByRole('slider', { name: 'Muziekvolume', exact: true })).toBeEnabled()
       await controller.goto('/control')
       await controller.getByLabel('Koppelcode', { exact: true }).fill(setup.pin)
       await controller.getByRole('button', { name: 'Verbind met de afspeler', exact: true }).click()

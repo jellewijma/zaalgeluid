@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState, type FormEvent } from "react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
-import { ArrowLeft, KeyRound, Link2, LoaderCircle, LogOut, Monitor, ShieldCheck, Smartphone, UserRound } from "lucide-react";
+import { ArrowLeft, KeyRound, Link2, LoaderCircle, LogOut, ShieldCheck, Smartphone, UserRound } from "lucide-react";
 import { AlertDialog } from "radix-ui";
 import { Header, Home, PlayerConsole } from "./App";
 import { Button } from "@/components/ui/button";
@@ -45,7 +45,7 @@ export default function CloudApp() {
       : <CloudPairing onPaired={setToken} />;
   }
   if (route !== "/player") return <Home cloud />;
-  if (isLoading) return <><Header cloud role="Afspeler" /><main className="setup-loading"><LoaderCircle className="spin" /><h1>Afspeler voorbereiden…</h1><p>Je aanmelding wordt gecontroleerd.</p></main></>;
+  if (isLoading) return <><Header cloud role="Afspeler" /><main className="setup-loading"><LoaderCircle className="spin" /><h1>Aanmelding controleren…</h1></main></>;
   if (!isAuthenticated) return <OwnerLogin notice={notice} />;
   return <CloudPlayer onInvalidSession={sessionExpired} onPasswordChanged={() => setNotice("Je wachtwoord is gewijzigd. Meld je aan met je nieuwe wachtwoord.")} />;
 }
@@ -111,26 +111,22 @@ function OwnerLogin({ notice }: { notice: string }) {
     <Header cloud role="Afspeler" />
     <main className="pairing-page owner-login">
       <a href={appPath("/")} className="back-link"><ArrowLeft size={16} /> Terug</a>
-      <div className="pairing-icon"><Monitor size={30} /></div>
-      <div className="eyebrow">JOUW AFSPELER</div>
-      <h1>Meld je aan op de pc.</h1>
-      <p>Open je liedjes en effecten. Daarna koppel je de tablet met de code op het scherm.</p>
+      <h1>Aanmelden</h1>
       {notice && <p className="account-notice" role="status">{notice}</p>}
       <div className="login-options">
-        {methods === undefined ? <p className="login-method-status" role="status"><LoaderCircle size={16} className="spin" /> Aanmeldopties laden…</p> : methods.google ? <>
+        {methods === undefined ? <p className="login-method-status" role="status"><LoaderCircle size={16} className="spin" /> Aanmeldopties laden…</p> : methods.google ?
           <Button className="google-login" variant="outline" disabled={busy !== null} onClick={() => void googleLogin()} aria-describedby={error ? "login-error" : undefined}>
             {/* Asset: https://developers.google.com/identity/branding-guidelines */}
             <img src={appPath("/google-g.png")} alt="" width={20} height={20} />
             {busy === "google" ? "Google openen…" : "Doorgaan met Google"}
           </Button>
-          <p className="login-method-help">Je Google-account krijgt een eigen bibliotheek en afspeler.</p>
-        </> : <p className="login-method-status" role="status">Google-aanmelding wordt nog ingesteld.</p>}
+        : <p className="login-method-status" role="status">Google-aanmelding wordt nog ingesteld.</p>}
         {methods?.guest && <div className="guest-login-option">
           <Button className="guest-login" variant="outline" disabled={busy !== null} onClick={() => void guestLogin()} aria-describedby={error ? "guest-login-help login-error" : "guest-login-help"}>
             {busy === "guest" ? <LoaderCircle className="spin" /> : <UserRound />}
             {busy === "guest" ? "Gastafspeler openen…" : "Doorgaan als gast"}
           </Button>
-          <p id="guest-login-help" className="login-method-help">Je gastbibliotheek hoort bij deze browser. Na afmelden, wissen van browsergegevens of het verlopen van je sessie kun je er niet meer bij. Gebruik Google voor een account waarop je later opnieuw kunt aanmelden.</p>
+          <p id="guest-login-help" className="login-method-help">De gastbibliotheek hoort bij deze browser. Na afmelden, wissen van browsergegevens of een verlopen sessie verlies je de toegang. Google heeft een aparte bibliotheek met blijvende toegang.</p>
         </div>}
         {error && <p id="login-error" className="error-note" role="alert">{error}</p>}
         {methods?.password && <details className="password-login" open={passwordExpanded || !methods.google} onToggle={event => setPasswordExpanded(event.currentTarget.open)}>
@@ -142,7 +138,7 @@ function OwnerLogin({ notice }: { notice: string }) {
           </form>
         </details>}
       </div>
-      <div className="pairing-hint"><Smartphone size={18} /><span>Scan op je tablet de QR-code of open de persoonlijke tabletlink die na het aanmelden op de pc verschijnt.</span></div>
+      <div className="pairing-hint"><Smartphone size={18} /><span>Koppel na aanmelden je tablet via de QR-code of tabletlink.</span></div>
       <p className="privacy-link"><a href={appPath("/privacy")}>Privacy en je gegevens</a></p>
     </main>
   </>;
@@ -176,11 +172,8 @@ function CloudPairing({ onPaired }: { onPaired: (token: string) => void }) {
     <Header cloud role="Bediening" />
     <main className="pairing-page">
       <a href={appPath("/")} className="back-link"><ArrowLeft size={16} /> Terug</a>
-      <div className="pairing-icon"><Smartphone size={30} /></div>
-      <div className="eyebrow">BEDIENING KOPPELEN</div>
-      <h1>Neem de bediening over.</h1>
-      <p>{roomId ? "Vul de 6-cijferige koppelcode in die op het afspelerscherm van de pc staat." : "Scan de QR-code op de pc of open de persoonlijke tabletlink. Zo bedien je jouw eigen afspeler."}</p>
-      {!roomId && <p>Heb je nog een koppelcode zonder persoonlijke link? Die kun je hieronder invullen.</p>}
+      <h1>Tablet koppelen</h1>
+      <p>{roomId ? "Vul de 6-cijferige koppelcode van de pc in." : "Scan de QR-code op de pc, open de tabletlink of vul hieronder je koppelcode in."}</p>
       <form onSubmit={event => void submit(event)}>
         <label htmlFor="pairing-code">Koppelcode</label>
         <Input id="pairing-code" className="pin-input" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} placeholder="000000" value={pin} onChange={event => setPin(event.target.value.replace(/\D/g, "").slice(0, 6))} required autoFocus disabled={busy} aria-describedby={error ? "pair-error" : undefined} />
@@ -269,7 +262,7 @@ function AccountControls({ onPasswordChanged }: { onPasswordChanged: () => void 
           <AlertDialog.Overlay className="guest-logout-overlay" />
           <AlertDialog.Content className="guest-logout-dialog" onEscapeKeyDown={event => { if (busy) event.preventDefault(); }}>
             <AlertDialog.Title>Afmelden als gast?</AlertDialog.Title>
-            <AlertDialog.Description>Na afmelden kun je deze gastbibliotheek en afspeler niet meer openen. Een volgende gastaanmelding begint met een nieuwe, lege bibliotheek.</AlertDialog.Description>
+            <AlertDialog.Description>Je verliest de toegang tot deze gastbibliotheek en afspeler. Een volgende gastaanmelding begint met een lege bibliotheek.</AlertDialog.Description>
             {error && <p className="error-note" role="alert">{error}</p>}
             <div className="guest-logout-actions">
               <AlertDialog.Cancel asChild><Button variant="outline" disabled={busy}>Annuleren</Button></AlertDialog.Cancel>
@@ -279,7 +272,7 @@ function AccountControls({ onPasswordChanged }: { onPasswordChanged: () => void 
         </AlertDialog.Portal>
       </AlertDialog.Root> : <Button size="sm" variant="ghost" disabled={busy || !account} onClick={() => void logout()}><LogOut /> Afmelden</Button>}
     </div>
-    {account?.isGuest && <p className="account-help">Je gebruikt een gastaccount in deze browser. Na afmelden, wissen van browsergegevens of het verlopen van je sessie kun je deze bibliotheek niet meer openen.</p>}
+    {account?.isGuest && <p className="account-help">De gastbibliotheek hoort bij deze browser. Na afmelden, wissen van browsergegevens of een verlopen sessie verlies je de toegang.</p>}
     {account?.canChangePassword && !account.isGuest && <details><summary>Wachtwoord wijzigen</summary>
       <form onSubmit={event => void submit(event)}>
         <p className="account-help">Gebruik 12 tot 200 tekens. Je wordt daarna op alle apparaten afgemeld en de audio stopt.</p>

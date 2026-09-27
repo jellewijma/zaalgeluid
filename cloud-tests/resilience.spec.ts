@@ -90,7 +90,7 @@ async function login(page: Page) {
   try { await page.getByLabel('Wachtwoord', { exact: true }).fill(password!) }
   catch { throw new Error('Het wachtwoordveld is niet bereikbaar.') }
   await page.getByRole('button', { name: 'Aanmelden', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Klaar voor jouw moment.' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Afspeler' })).toBeVisible()
 }
 
 test('DEV: short outage buffers both channels, expired commands stay ignored, long outage stops and old player is fenced', async ({ browser }, info) => {
@@ -113,7 +113,7 @@ test('DEV: short outage buffers both channels, expired commands stay ignored, lo
     if (await recover.isVisible()) await recover.click()
     await expect(first.getByRole('button', { name: 'Audio activeren', exact: true })).toBeEnabled()
     await first.getByRole('button', { name: 'Audio activeren', exact: true }).click()
-    await expect(first.getByText('Afspeler verbonden en audio geactiveerd', { exact: true })).toBeVisible()
+    await expect(first.getByRole('slider', { name: 'Muziekvolume', exact: true })).toBeEnabled()
     await first.getByLabel('Audiobestanden toevoegen', { exact: true }).setInputFiles({ name: `${song}.wav`, mimeType: 'audio/wav', buffer: quietWav() })
     await expect(first.getByRole('button', { name: `${song} klaarzetten`, exact: true })).toBeVisible()
     await first.getByLabel('Geluidseffecten toevoegen', { exact: true }).setInputFiles({ name: `${effect}.wav`, mimeType: 'audio/wav', buffer: quietWav() })
@@ -141,7 +141,7 @@ test('DEV: short outage buffers both channels, expired commands stay ignored, lo
     expect(during[0].time - before[0]).toBeGreaterThan(6)
     expect(during[1].time - before[1]).toBeGreaterThan(6)
     await firstContext.setOffline(false)
-    await expect(first.getByText('Afspeler verbonden en audio geactiveerd', { exact: true })).toBeVisible()
+    await expect(first.getByRole('slider', { name: 'Muziekvolume', exact: true })).toBeEnabled()
     await expect.poll(async () => (await media(first))[0]?.time).toBeGreaterThan(during[0].time + 1)
     expect((await media(first)).map(audio => audio.paused)).toEqual([false, false])
     const reconnected = info.outputPath('cloud-reconnected-no-stale-stop.png')
@@ -185,7 +185,7 @@ test('DEV: short outage buffers both channels, expired commands stay ignored, lo
     await next.getByRole('button', { name: 'Alle tablets ontkoppelen', exact: true }).click()
     await expect(tablet.getByLabel('Koppelcode', { exact: true })).toBeVisible()
     await next.getByRole('button', { name: 'Afmelden', exact: true }).click()
-    await expect(next.getByRole('heading', { name: 'Meld je aan op de pc.' })).toBeVisible()
+    await expect(next.getByRole('heading', { name: 'Aanmelden' })).toBeVisible()
   } finally {
     await firstContext.setOffline(false)
     for (const context of [tabletContext, nextContext, firstContext]) await context.close()
