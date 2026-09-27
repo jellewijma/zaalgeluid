@@ -91,7 +91,7 @@ test('the complete player and controller flow stays below /play-audio', async ({
     await expect(controller.getByRole('heading', { name: 'Prefixlied', exact: true })).toBeVisible()
     await controller.getByRole('button', { name: 'Afspelen', exact: true }).tap()
     await expect.poll(() => player.evaluate(() => window.__prefixAudio[0].currentTime)).toBeGreaterThan(0.1)
-    await controller.getByRole('tab', { name: 'Geluidseffecten', exact: true }).tap()
+    await expect(controller.getByRole('region', { name: 'Geluidseffecten', exact: true })).toBeVisible()
     await controller.getByRole('button', { name: 'Prefixeffect effect afspelen', exact: true }).tap()
     await expect.poll(() => player.evaluate(() => window.__prefixAudio[1].currentTime)).toBeGreaterThan(0.1)
     const media = await player.evaluate(() => window.__prefixAudio.map(audio => ({ pathname: new URL(audio.currentSrc).pathname, paused: audio.paused })))

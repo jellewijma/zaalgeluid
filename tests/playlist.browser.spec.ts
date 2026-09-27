@@ -150,7 +150,7 @@ test('queued songs advance naturally and effects play with independent volume an
   await expect(controller.getByRole('button', { name: 'Vorig liedje', exact: true })).toBeEnabled()
   await expect(controller.getByRole('button', { name: 'Volgend liedje', exact: true })).toBeDisabled()
 
-  await controller.getByRole('tab', { name: 'Geluidseffecten', exact: true }).tap()
+  await expect(controller.getByRole('region', { name: 'Geluidseffecten', exact: true })).toBeVisible()
   await controller.getByRole('button', { name: 'Applaus effect afspelen', exact: true }).tap()
   await expect.poll(async () => (await nativeMedia(player)).effect.time).toBeGreaterThan(0.2)
   expect((await nativeMedia(player)).music.paused).toBe(false)
@@ -176,37 +176,94 @@ test('queued songs advance naturally and effects play with independent volume an
     const media = await nativeMedia(player)
     return [media.music.paused, media.music.time, media.effect.paused]
   }).toEqual([true, 0, true])
+
+  await upload(player, [{ name: 'Beschadigd effect.wav', mimeType: 'audio/wav', buffer: Buffer.from('not a valid audio file') }], true)
+  await controller.getByRole('button', { name: 'Beschadigd effect effect afspelen', exact: true }).tap()
+  await expect(controller.getByRole('alert')).toContainText(/niet ondersteund|beschadigd|niet worden afgespeeld/)
+  for (const [width, height] of [[1024, 600], [390, 844]]) {
+    await controller.setViewportSize({ width, height })
+    await expect.poll(async () => {
+      const songs = await controller.getByRole('region', { name: 'Audiobibliotheek', exact: true }).boundingBox()
+      const pagination = await controller.getByRole('navigation', { name: "Fragmentpagina's", exact: true }).boundingBox()
+      const effects = await controller.getByRole('region', { name: 'Geluidseffecten', exact: true }).boundingBox()
+      return !!songs && !!pagination && !!effects
+        && pagination.y >= songs.y
+        && pagination.y + pagination.height <= songs.y + songs.height
+        && effects.y >= songs.y + songs.height
+    }).toBe(true)
+  }
 })
 
 test('tablet playlist and effects remain reachable by touch and keyboard without scrolling', async ({ room: { player, controller } }, testInfo) => {
   await upload(player, Array.from({ length: 25 }, (_, index) => audioFile(`Liedje ${String(index + 1).padStart(2, '0')}`, 2)))
-  await upload(player, Array.from({ length: 16 }, (_, index) => audioFile(`Effect ${String(index + 1).padStart(2, '0')}`, 30)), true)
+  await upload(player, Array.from({ length: 18 }, (_, index) => audioFile(`Effect ${String(index + 1).padStart(2, '0')}`, 30)), true)
+  const effects = controller.getByRole('region', { name: 'Geluidseffecten', exact: true })
+  const effectButtons = effects.getByRole('button', { name: / effect afspelen$/ })
+  const previousEffects = effects.getByRole('button', { name: 'Vorige geluidseffecten', exact: true })
+  const nextEffects = effects.getByRole('button', { name: 'Volgende geluidseffecten', exact: true })
+  await expect(effects).toBeVisible()
+  await expect(controller.getByRole('tab', { name: 'Geluidseffecten', exact: true })).toHaveCount(0)
+  await expect(effectButtons).toHaveCount(4)
+  await expect(effects.locator('.tablet-effect-name')).toHaveText(['Effect 01', 'Effect 02', 'Effect 03', 'Effect 04'])
+  await expect(effects.getByText('1–4 van 18', { exact: true })).toBeVisible()
+  await expect(previousEffects).toBeDisabled()
   const add = await findLibraryButton(controller, 'Liedje 25 aan afspeellijst toevoegen')
   await tabTo(controller, add)
   await controller.keyboard.press('Enter')
   await expect(controller.getByRole('heading', { name: 'Liedje 25', exact: true })).toBeVisible()
   expect((await nativeMedia(player)).music.paused).toBe(true)
+  await expect(effects.locator('.tablet-effect-name')).toHaveText(['Effect 01', 'Effect 02', 'Effect 03', 'Effect 04'])
   await controller.getByRole('tab', { name: 'Afspeellijst', exact: true }).tap()
   await expect(controller.getByRole('button', { name: 'Liedje 25 uit afspeellijst verwijderen', exact: true })).toBeVisible()
-  await controller.getByRole('tab', { name: 'Geluidseffecten', exact: true }).tap()
-  const effect = await findLibraryButton(controller, 'Effect 16 effect afspelen')
+  await tabTo(controller, nextEffects)
+  await controller.keyboard.press('Enter')
+  await expect(effects.locator('.tablet-effect-name')).toHaveText(['Effect 05', 'Effect 06', 'Effect 07', 'Effect 08'])
+  for (const start of [9, 13, 17]) {
+    await nextEffects.tap()
+    const end = Math.min(start + 3, 18)
+    await expect(effects.getByText(`${start}–${end} van 18`, { exact: true })).toBeVisible()
+    await expect(effectButtons).toHaveCount(end - start + 1)
+    await expect(controller.locator('.tablet-fragment-name')).toHaveText(['Liedje 25'])
+  }
+  await expect(effects.locator('.tablet-effect-name')).toHaveText(['Effect 17', 'Effect 18'])
+  await expect(nextEffects).toBeDisabled()
+  await tabTo(controller, previousEffects)
+  await controller.keyboard.press('Enter')
+  await expect(effectButtons).toHaveCount(4)
+  await expect(effects.locator('.tablet-effect-name')).toHaveText(['Effect 13', 'Effect 14', 'Effect 15', 'Effect 16'])
+  const effect = effects.getByRole('button', { name: 'Effect 16 effect afspelen', exact: true })
   await tabTo(controller, effect)
   await controller.keyboard.press('Space')
   await expect.poll(async () => (await nativeMedia(player)).effect.paused).toBe(false)
   expect((await nativeMedia(player)).music.paused).toBe(true)
   await expect(controller.getByText('Effect speelt', { exact: true })).toBeVisible()
+  await nextEffects.tap()
+  await expect(effect).toHaveCount(0)
+  await expect(effects.getByRole('status')).toBeVisible()
+  await expect(effects.getByRole('status')).toContainText('Effect 16')
+  await expect(effects.getByRole('status')).toContainText('Effect speelt')
+  await previousEffects.tap()
+  await expect(effect).toBeVisible()
 
   for (const [width, height] of [[1024, 600], [768, 1024], [390, 844]]) {
     await controller.setViewportSize({ width, height })
-    for (const name of ['Liedjes', 'Afspeellijst', 'Geluidseffecten']) {
+    for (const name of ['Liedjes', 'Afspeellijst']) {
       await controller.getByRole('tab', { name, exact: true }).tap()
       await expectNoScroll(controller)
+      await expect(effectButtons).toHaveCount(4)
+      await expect(effects.locator('.tablet-effect-name')).toHaveText(['Effect 13', 'Effect 14', 'Effect 15', 'Effect 16'])
+      const songsBox = await controller.getByRole('region', { name: 'Audiobibliotheek', exact: true }).boundingBox()
+      const effectsBox = await effects.boundingBox()
+      expect(effectsBox!.y).toBeGreaterThanOrEqual(songsBox!.y + songsBox!.height)
     }
     const screenshot = testInfo.outputPath(`playlist-effects-${width}x${height}.png`)
     await controller.screenshot({ path: screenshot, fullPage: true })
     await testInfo.attach(`${width}×${height}`, { path: screenshot, contentType: 'image/png' })
   }
   await controller.getByRole('button', { name: 'Effect stoppen', exact: true }).tap()
+  while (await previousEffects.isEnabled()) await previousEffects.tap()
+  await expect(previousEffects).toBeDisabled()
+  await expect(effects.getByText('1–4 van 18', { exact: true })).toBeVisible()
   await controller.getByRole('tab', { name: 'Afspeellijst', exact: true }).tap()
   const remove = controller.getByRole('button', { name: 'Liedje 25 uit afspeellijst verwijderen', exact: true })
   await tabTo(controller, remove)

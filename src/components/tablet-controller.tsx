@@ -35,7 +35,9 @@ const playbackLabels: Record<Playback["status"], string> = {
   error: "Audio controleren",
 };
 
-type LibraryView = "music" | "queue" | "effects";
+type LibraryView = "music" | "queue";
+
+const effectsPerPage = 4;
 
 const effectLabels: Record<Playback["status"], string> = {
   idle: "Kies een effect",
@@ -80,7 +82,12 @@ export function TabletController({
   const hasEffects = effects.length > 0;
   const effectActive = playback.effectStatus === "playing" || playback.effectStatus === "loading";
   const [library, setLibrary] = useState<LibraryView>("music");
-  const libraryTracks = library === "effects" ? effects : library === "queue" ? queue : music;
+  const libraryTracks = library === "queue" ? queue : music;
+  const [effectPageAnchor, setEffectPageAnchor] = useState(0);
+  const effectPageCount = Math.max(1, Math.ceil(effects.length / effectsPerPage));
+  const effectPage = Math.min(effectPageAnchor, effectPageCount - 1);
+  const effectStart = effectPage * effectsPerPage;
+  const visibleEffects = effects.slice(effectStart, effectStart + effectsPerPage);
   const [dragVolume, setDragVolume] = useState<number | null>(null);
   const [dragEffectVolume, setDragEffectVolume] = useState<number | null>(null);
   const [dragSeek, setDragSeek] = useState<number | null>(null);
@@ -250,29 +257,107 @@ export function TabletController({
           </div>
         </section>
 
-        <Tabs.Root value={library} onValueChange={(value) => {
-          setLibrary(value as LibraryView);
-          setPageAnchor(0);
-        }} asChild>
-          <section className="tablet-library" aria-label="Audiobibliotheek">
-            <Tabs.List className="tablet-library-tabs" aria-label="Bibliotheek kiezen">
-              {([
-                ["music", "Liedjes", music.length],
-                ["queue", "Afspeellijst", queue.length],
-                ["effects", "Geluidseffecten", effects.length],
-              ] as const).map(([value, label, count]) => (
-                <Tabs.Trigger key={value} value={value} asChild>
-                  <Button variant="ghost" aria-label={label}>
-                    {label}<span>{count}</span>
+        <div className="tablet-library-stack">
+          <Tabs.Root value={library} onValueChange={(value) => {
+            setLibrary(value as LibraryView);
+            setPageAnchor(0);
+          }} asChild>
+            <section className="tablet-library" aria-label="Audiobibliotheek">
+              <Tabs.List className="tablet-library-tabs" aria-label="Bibliotheek kiezen">
+                {([
+                  ["music", "Liedjes", music.length],
+                  ["queue", "Afspeellijst", queue.length],
+                ] as const).map(([value, label, count]) => (
+                  <Tabs.Trigger key={value} value={value} asChild>
+                    <Button variant="ghost" aria-label={label}>
+                      {label}<span>{count}</span>
+                    </Button>
+                  </Tabs.Trigger>
+                ))}
+              </Tabs.List>
+              <Tabs.Content value={library} className="tablet-library-content">
+                <div className="tablet-fragment-space" ref={fragmentSpace}>
+                  {libraryTracks.length === 0 ? (
+                    <div className="tablet-empty">
+                      <strong>{library === "queue" ? "Je afspeellijst is leeg" : "Nog geen liedjes"}</strong>
+                      <p>{library === "queue" ? "Tik bij een liedje op + om het toe te voegen." : "Voeg audio toe op de PA-pc."}</p>
+                    </div>
+                  ) : (
+                    <div
+                      className="tablet-fragments"
+                      style={{
+                        gridTemplateColumns: `repeat(${capacity.columns}, minmax(0, 1fr))`,
+                        gridTemplateRows: `repeat(${capacity.rows}, minmax(66px, 1fr))`,
+                      }}
+                    >
+                      {visibleTracks.map((track, index) => {
+                        const selected = track.id === playback.trackId;
+                        const queued = playback.queue.includes(track.id);
+                        return (
+                          <div key={track.id} className={cn("tablet-track", selected && "tablet-selected")}>
+                            <Button
+                              variant="ghost"
+                              className="tablet-fragment"
+                              disabled={!ready}
+                              aria-label={`${track.name} klaarzetten`}
+                              aria-pressed={selected}
+                              title={track.name}
+                              onClick={() => command({ action: "select", trackId: track.id })}
+                            >
+                              <span className="tablet-fragment-number">{String(start + index + 1).padStart(2, "0")}</span>
+                              <span className="tablet-fragment-name">{track.name}</span>
+                              {selected && <Check className="tablet-fragment-check" aria-hidden="true" />}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              className="tablet-queue-toggle"
+                              disabled={!ready || (!queued && playback.queue.length >= 200)}
+                              aria-pressed={queued}
+                              aria-label={`${track.name} ${queued ? "uit afspeellijst verwijderen" : "aan afspeellijst toevoegen"}`}
+                              title={queued ? "Uit afspeellijst verwijderen" : "Aan afspeellijst toevoegen"}
+                              onClick={() => command({ action: queued ? "queue-remove" : "queue-add", trackId: track.id })}
+                            >
+                              {queued ? <Minus /> : <Plus />}
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <nav className="tablet-pagination" aria-label="Fragmentpagina's">
+                  <Button
+                    variant="outline"
+                    aria-label="Vorige fragmenten"
+                    disabled={page === 0}
+                    onClick={() => setPageAnchor((page - 1) * pageSize)}
+                  >
+                    <ChevronLeft />
                   </Button>
-                </Tabs.Trigger>
-              ))}
-            </Tabs.List>
-            {hasEffects && (
+                  <span aria-live="polite">
+                    {libraryTracks.length === 0 ? "0 items" : `${start + 1}–${Math.min(start + pageSize, libraryTracks.length)} van ${libraryTracks.length}`}
+                  </span>
+                  <Button
+                    variant="outline"
+                    aria-label="Volgende fragmenten"
+                    disabled={page >= pageCount - 1}
+                    onClick={() => setPageAnchor((page + 1) * pageSize)}
+                  >
+                    <ChevronRight />
+                  </Button>
+                </nav>
+              </Tabs.Content>
+            </section>
+          </Tabs.Root>
+          {hasEffects && (
+            <section className="tablet-effects" aria-label="Geluidseffecten">
               <div className="tablet-effect-controls" aria-label="Geluidseffect bedienen">
-                <div className="tablet-effect-current" role="status">
-                  <strong title={effect?.name}>{effect?.name || "Geluidseffect"}</strong>
-                  <span className={cn(effectActive && "tablet-playing")}>{effectLabels[playback.effectStatus]}</span>
+                <div className="tablet-effect-current">
+                  <h2>Geluidseffecten</h2>
+                  <span className={cn(effectActive && "tablet-playing")} role="status" title={effect?.name}>
+                    {effect && `${effect.name} · `}<span>{effectLabels[playback.effectStatus]}</span>
+                  </span>
+                  <span aria-live="polite">{effectStart + 1}–{Math.min(effectStart + effectsPerPage, effects.length)} van {effects.length}</span>
                 </div>
                 <div className="tablet-effect-volume">
                   <div><label id="tablet-effect-volume-label">Effectvolume</label><span>{effectVolume}%</span></div>
@@ -293,84 +378,34 @@ export function TabletController({
                   <Square fill="currentColor" />
                 </Button>
               </div>
-            )}
-            <Tabs.Content value={library} className="tablet-library-content">
-              <div className="tablet-fragment-space" ref={fragmentSpace}>
-                {libraryTracks.length === 0 ? (
-                  <div className="tablet-empty">
-                    <strong>{library === "queue" ? "Je afspeellijst is leeg" : library === "effects" ? "Nog geen geluidseffecten" : "Nog geen liedjes"}</strong>
-                    <p>{library === "queue" ? "Tik bij een liedje op + om het toe te voegen." : "Voeg audio toe op de PA-pc."}</p>
-                  </div>
-                ) : (
-                  <div
-                    className="tablet-fragments"
-                    style={{
-                      gridTemplateColumns: `repeat(${capacity.columns}, minmax(0, 1fr))`,
-                      gridTemplateRows: `repeat(${capacity.rows}, minmax(66px, 1fr))`,
-                    }}
-                  >
-                    {visibleTracks.map((track, index) => {
-                      const selected = track.id === (library === "effects" ? playback.effectTrackId : playback.trackId);
-                      const queued = playback.queue.includes(track.id);
-                      return (
-                        <div key={track.id} className={cn("tablet-track", selected && "tablet-selected")}>
-                          <Button
-                            variant="ghost"
-                            className="tablet-fragment"
-                            disabled={!ready}
-                            aria-label={`${track.name} ${library === "effects" ? "effect afspelen" : "klaarzetten"}`}
-                            aria-pressed={selected}
-                            title={track.name}
-                            onClick={() => command({ action: library === "effects" ? "effect-play" : "select", trackId: track.id })}
-                          >
-                            <span className="tablet-fragment-number">{String(start + index + 1).padStart(2, "0")}</span>
-                            <span className="tablet-fragment-name">{track.name}</span>
-                            {selected && <Check className="tablet-fragment-check" aria-hidden="true" />}
-                            {library === "effects" && !selected && <Play aria-hidden="true" />}
-                          </Button>
-                          {library !== "effects" && (
-                            <Button
-                              variant="ghost"
-                              className="tablet-queue-toggle"
-                              disabled={!ready || (!queued && playback.queue.length >= 200)}
-                              aria-pressed={queued}
-                              aria-label={`${track.name} ${queued ? "uit afspeellijst verwijderen" : "aan afspeellijst toevoegen"}`}
-                              title={queued ? "Uit afspeellijst verwijderen" : "Aan afspeellijst toevoegen"}
-                              onClick={() => command({ action: queued ? "queue-remove" : "queue-add", trackId: track.id })}
-                            >
-                              {queued ? <Minus /> : <Plus />}
-                            </Button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-              <nav className="tablet-pagination" aria-label="Fragmentpagina's">
-                <Button
-                  variant="outline"
-                  aria-label="Vorige fragmenten"
-                  disabled={page === 0}
-                  onClick={() => setPageAnchor((page - 1) * pageSize)}
-                >
+              <nav className="tablet-effect-pagination" aria-label="Geluidseffectpagina's">
+                <Button variant="outline" size="icon" aria-label="Vorige geluidseffecten" disabled={effectPage === 0} onClick={() => setEffectPageAnchor(effectPage - 1)}>
                   <ChevronLeft />
                 </Button>
-                <span aria-live="polite">
-                  {libraryTracks.length === 0 ? "0 items" : `${start + 1}–${Math.min(start + pageSize, libraryTracks.length)} van ${libraryTracks.length}`}
-                </span>
-                <Button
-                  variant="outline"
-                  aria-label="Volgende fragmenten"
-                  disabled={page >= pageCount - 1}
-                  onClick={() => setPageAnchor((page + 1) * pageSize)}
-                >
+                <div className="tablet-effect-buttons">
+                  {visibleEffects.map((track) => (
+                    <Button
+                      key={track.id}
+                      variant="outline"
+                      className={cn("tablet-effect-button", track.id === playback.effectTrackId && "tablet-selected")}
+                      disabled={!ready}
+                      aria-label={`${track.name} effect afspelen`}
+                      aria-pressed={track.id === playback.effectTrackId}
+                      title={track.name}
+                      onClick={() => command({ action: "effect-play", trackId: track.id })}
+                    >
+                      <span className="tablet-effect-name">{track.name}</span>
+                      {track.id === playback.effectTrackId ? <Check aria-hidden="true" /> : <Play aria-hidden="true" />}
+                    </Button>
+                  ))}
+                </div>
+                <Button variant="outline" size="icon" aria-label="Volgende geluidseffecten" disabled={effectPage >= effectPageCount - 1} onClick={() => setEffectPageAnchor(effectPage + 1)}>
                   <ChevronRight />
                 </Button>
               </nav>
-            </Tabs.Content>
-          </section>
-        </Tabs.Root>
+            </section>
+          )}
+        </div>
       </main>
     </div>
   );

@@ -129,7 +129,7 @@ test('online login, stored audio, tablet queue/effects and explicit second-PC ta
     await tablet.getByRole('button', { name: 'Afspelen', exact: true }).tap()
     await expect.poll(async () => (await media(first))[0]?.paused).toBe(false)
     await expect.poll(async () => (await media(first))[0]?.time).toBeGreaterThan(0.1)
-    await tablet.getByRole('tab', { name: 'Geluidseffecten', exact: true }).tap()
+    await expect(tablet.getByRole('region', { name: 'Geluidseffecten', exact: true })).toBeVisible()
     await tablet.getByRole('button', { name: `${effect} effect afspelen`, exact: true }).tap()
     await expect.poll(async () => (await media(first)).map(audio => audio.paused)).toEqual([false, false])
     await expect.poll(async () => (await media(first))[1]?.time).toBeGreaterThan(0.1)
