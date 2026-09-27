@@ -13,6 +13,11 @@ test('login exposes only configured methods and keeps the password fallback keyb
     await page.keyboard.press('Tab')
     await expect(google).toBeFocused()
     await page.keyboard.press('Tab')
+    const guest = page.getByRole('button', { name: 'Doorgaan als gast', exact: true })
+    if (await guest.isVisible()) {
+      await expect(guest).toBeFocused()
+      await page.keyboard.press('Tab')
+    }
     await expect(page.locator('.password-login summary')).toBeFocused()
     await page.keyboard.press('Enter')
   } else {

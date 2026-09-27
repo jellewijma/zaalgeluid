@@ -16,6 +16,11 @@ export async function findOwner(ctx: QueryCtx | MutationCtx) {
   const user = await ctx.db.get(userId);
   if (!user) return null;
   if (await isLegacyOwner(ctx, userId)) return user;
+  if (user.isAnonymous === true) {
+    const anonymous = await ctx.db.query("authAccounts")
+      .withIndex("userIdAndProvider", q => q.eq("userId", userId).eq("provider", "anonymous")).take(1);
+    return anonymous[0]?.providerAccountId ? user : null;
+  }
   const google = await ctx.db.query("authAccounts")
     .withIndex("userIdAndProvider", q => q.eq("userId", userId).eq("provider", "google")).take(1);
   return google[0]?.providerAccountId && google[0].emailVerified && user.emailVerificationTime !== undefined ? user : null;

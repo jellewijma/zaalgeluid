@@ -39,6 +39,14 @@ export async function createAuthUser(ctx: MutationCtx, {
   provider: { id: string };
   profile: Record<string, unknown>;
 }) {
+  if (provider.id === "anonymous") {
+    if (profile.isAnonymous !== true || existingUserId !== null) {
+      throw new Error("Gastaanmelding niet toegestaan.");
+    }
+    // Anonymous supplies this marker and a random account ID on the server.
+    // Never copy client profile fields or reuse another account's library.
+    return ctx.db.insert("users", { name: "Gast", isAnonymous: true });
+  }
   if (provider.id === "google") {
     if (profile.emailVerified !== true || typeof profile.email !== "string" || !profile.email.trim()) {
       throw new Error("Gebruik een Google-account met een geverifieerd e-mailadres.");

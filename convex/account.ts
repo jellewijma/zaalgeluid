@@ -6,16 +6,16 @@ import { findOwner, isLegacyOwner, ownerLogin } from "./access";
 import { googleConfigured } from "./auth_policy";
 
 export const current = query({
-  args: {}, returns: v.union(v.object({ name: v.string(), email: v.string(), canChangePassword: v.boolean() }), v.null()),
+  args: {}, returns: v.union(v.object({ name: v.string(), email: v.string(), canChangePassword: v.boolean(), isGuest: v.boolean() }), v.null()),
   handler: async ctx => {
     const user = await findOwner(ctx);
-    return user ? { name: user.name ?? user.email ?? "", email: user.email ?? "", canChangePassword: await isLegacyOwner(ctx, user._id) } : null;
+    return user ? { name: user.name ?? user.email ?? "", email: user.email ?? "", canChangePassword: await isLegacyOwner(ctx, user._id), isGuest: user.isAnonymous === true } : null;
   },
 });
 
 export const authMethods = query({
-  args: {}, returns: v.object({ google: v.boolean(), password: v.boolean() }),
-  handler: async () => ({ google: googleConfigured(), password: Boolean(process.env.OWNER_LOGIN?.trim()) }),
+  args: {}, returns: v.object({ google: v.boolean(), password: v.boolean(), guest: v.boolean() }),
+  handler: async () => ({ google: googleConfigured(), password: Boolean(process.env.OWNER_LOGIN?.trim()), guest: true }),
 });
 
 function validatePassword(password: string) {

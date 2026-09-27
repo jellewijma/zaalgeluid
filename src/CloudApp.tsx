@@ -1,7 +1,8 @@
-import { useCallback, useState, type FormEvent } from "react";
+import { useCallback, useRef, useState, type FormEvent } from "react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
-import { ArrowLeft, KeyRound, Link2, LoaderCircle, LogOut, Monitor, ShieldCheck, Smartphone } from "lucide-react";
+import { ArrowLeft, KeyRound, Link2, LoaderCircle, LogOut, Monitor, ShieldCheck, Smartphone, UserRound } from "lucide-react";
+import { AlertDialog } from "radix-ui";
 import { Header, Home, PlayerConsole } from "./App";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,11 +55,13 @@ function OwnerLogin({ notice }: { notice: string }) {
   const methods = useQuery(api.account.authMethods, {});
   const [username, setUsername] = useState("jelle");
   const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState<"google" | "password" | null>(null);
+  const [busy, setBusy] = useState<"google" | "password" | "guest" | null>(null);
+  const loginPending = useRef(false);
   const [error, setError] = useState(oauthError);
   const [passwordExpanded, setPasswordExpanded] = useState(false);
   async function googleLogin() {
-    if (busy || !methods?.google) return;
+    if (loginPending.current || !methods?.google) return;
+    loginPending.current = true;
     setBusy("google");
     setError("");
     const url = new URL(location.href);
@@ -69,23 +72,40 @@ function OwnerLogin({ notice }: { notice: string }) {
       const result = await signIn("google", { redirectTo: location.origin + appPath("/player") });
       if (!result.redirect) {
         setError("Aanmelden met Google is niet gelukt. Probeer het opnieuw.");
+        loginPending.current = false;
         setBusy(null);
       }
     } catch {
       setError("Aanmelden met Google is niet gelukt. Controleer je internetverbinding en probeer het opnieuw.");
+      loginPending.current = false;
+      setBusy(null);
+    }
+  }
+  async function guestLogin() {
+    if (loginPending.current || !methods?.guest) return;
+    loginPending.current = true;
+    setBusy("guest");
+    setError("");
+    try {
+      const result = await signIn("anonymous");
+      if (!result.signingIn) throw new Error("Geen gastaanmelding ontvangen.");
+    } catch {
+      setError("Aanmelden als gast is niet gelukt. Controleer je internetverbinding en probeer het opnieuw.");
+      loginPending.current = false;
       setBusy(null);
     }
   }
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (busy) return;
+    if (loginPending.current) return;
+    loginPending.current = true;
     setBusy("password");
     setError("");
     try {
       await signIn("password", { email: username.trim(), password, flow: "signIn" });
     } catch {
       setError("Aanmelden is niet gelukt. Controleer je gebruikersnaam en wachtwoord, en probeer het opnieuw.");
-    } finally { setBusy(null); }
+    } finally { loginPending.current = false; setBusy(null); }
   }
   return <>
     <Header cloud role="Afspeler" />
@@ -105,6 +125,13 @@ function OwnerLogin({ notice }: { notice: string }) {
           </Button>
           <p className="login-method-help">Je Google-account krijgt een eigen bibliotheek en afspeler.</p>
         </> : <p className="login-method-status" role="status">Google-aanmelding wordt nog ingesteld.</p>}
+        {methods?.guest && <div className="guest-login-option">
+          <Button className="guest-login" variant="outline" disabled={busy !== null} onClick={() => void guestLogin()} aria-describedby={error ? "guest-login-help login-error" : "guest-login-help"}>
+            {busy === "guest" ? <LoaderCircle className="spin" /> : <UserRound />}
+            {busy === "guest" ? "Gastafspeler openen…" : "Doorgaan als gast"}
+          </Button>
+          <p id="guest-login-help" className="login-method-help">Je gastbibliotheek hoort bij deze browser. Na afmelden, wissen van browsergegevens of het verlopen van je sessie kun je er niet meer bij. Gebruik Google voor een account waarop je later opnieuw kunt aanmelden.</p>
+        </div>}
         {error && <p id="login-error" className="error-note" role="alert">{error}</p>}
         {methods?.password && <details className="password-login" open={passwordExpanded || !methods.google} onToggle={event => setPasswordExpanded(event.currentTarget.open)}>
           <summary>Aanmelden met wachtwoord</summary>
@@ -207,12 +234,16 @@ function AccountControls({ onPasswordChanged }: { onPasswordChanged: () => void 
   const [confirmation, setConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [confirmGuestLogout, setConfirmGuestLogout] = useState(false);
+  const logoutPending = useRef(false);
   async function logout() {
+    if (logoutPending.current || busy) return;
+    logoutPending.current = true;
     setBusy(true);
     setError("");
     try { await signOut(); }
     catch { setError("Afmelden is niet gelukt. Probeer het opnieuw."); }
-    finally { setBusy(false); }
+    finally { logoutPending.current = false; setBusy(false); }
   }
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -231,8 +262,25 @@ function AccountControls({ onPasswordChanged }: { onPasswordChanged: () => void 
     finally { setBusy(false); }
   }
   return <section className="account-panel" aria-label="Je account">
-    <div className="account-heading"><span><ShieldCheck size={16} /><span>{account ? `Aangemeld als ${account.name || account.email || "gebruiker"}` : "Aangemeld"}</span></span><Button size="sm" variant="ghost" disabled={busy} onClick={() => void logout()}><LogOut /> Afmelden</Button></div>
-    {account?.canChangePassword && <details><summary>Wachtwoord wijzigen</summary>
+    <div className="account-heading"><span><ShieldCheck size={16} /><span>{account?.isGuest ? "Aangemeld als gast" : account ? `Aangemeld als ${account.name || account.email || "gebruiker"}` : "Aangemeld"}</span></span>
+      {account?.isGuest ? <AlertDialog.Root open={confirmGuestLogout} onOpenChange={open => { if (!busy) setConfirmGuestLogout(open); }}>
+        <AlertDialog.Trigger asChild><Button size="sm" variant="ghost" disabled={busy}><LogOut /> Afmelden</Button></AlertDialog.Trigger>
+        <AlertDialog.Portal>
+          <AlertDialog.Overlay className="guest-logout-overlay" />
+          <AlertDialog.Content className="guest-logout-dialog" onEscapeKeyDown={event => { if (busy) event.preventDefault(); }}>
+            <AlertDialog.Title>Afmelden als gast?</AlertDialog.Title>
+            <AlertDialog.Description>Na afmelden kun je deze gastbibliotheek en afspeler niet meer openen. Een volgende gastaanmelding begint met een nieuwe, lege bibliotheek.</AlertDialog.Description>
+            {error && <p className="error-note" role="alert">{error}</p>}
+            <div className="guest-logout-actions">
+              <AlertDialog.Cancel asChild><Button variant="outline" disabled={busy}>Annuleren</Button></AlertDialog.Cancel>
+              <AlertDialog.Action asChild><Button variant="destructive" disabled={busy} onClick={event => { event.preventDefault(); void logout(); }}>{busy && <LoaderCircle className="spin" />}{busy ? "Afmelden…" : "Afmelden als gast"}</Button></AlertDialog.Action>
+            </div>
+          </AlertDialog.Content>
+        </AlertDialog.Portal>
+      </AlertDialog.Root> : <Button size="sm" variant="ghost" disabled={busy || !account} onClick={() => void logout()}><LogOut /> Afmelden</Button>}
+    </div>
+    {account?.isGuest && <p className="account-help">Je gebruikt een gastaccount in deze browser. Na afmelden, wissen van browsergegevens of het verlopen van je sessie kun je deze bibliotheek niet meer openen.</p>}
+    {account?.canChangePassword && !account.isGuest && <details><summary>Wachtwoord wijzigen</summary>
       <form onSubmit={event => void submit(event)}>
         <p className="account-help">Gebruik 12 tot 200 tekens. Je wordt daarna op alle apparaten afgemeld en de audio stopt.</p>
         <div className="account-field">
@@ -256,6 +304,6 @@ function AccountControls({ onPasswordChanged }: { onPasswordChanged: () => void 
         <Button type="submit" variant="outline" disabled={busy}>{busy ? <LoaderCircle className="spin" /> : <KeyRound />} Wachtwoord wijzigen</Button>
       </form>
     </details>}
-    {error && <p className="error-note" role="alert">{error}</p>}
+    {error && !confirmGuestLogout && <p className="error-note" role="alert">{error}</p>}
   </section>;
 }
