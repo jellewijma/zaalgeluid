@@ -60,6 +60,19 @@ export const finishUpload = ownerMutation({
   },
 });
 
+export const rename = ownerMutation({
+  args: { trackId: v.string(), name: v.string() }, returns: v.null(),
+  handler: async (ctx, { trackId, name }) => {
+    const id = ctx.db.normalizeId("media", trackId);
+    const file = id ? await ctx.db.get(id) : null;
+    if (!file || file.ownerId !== ctx.owner._id) throw new Error("Geen toegang tot dit bestand.");
+    const cleanName = name.trim();
+    if (!cleanName || cleanName.length > 200) throw new Error("Vul een naam van maximaal 200 tekens in.");
+    await ctx.db.patch(file._id, { name: cleanName });
+    return null;
+  },
+});
+
 export const remove = ownerMutation({
   args: { trackId: v.string() }, returns: v.null(),
   handler: async (ctx, { trackId }) => {

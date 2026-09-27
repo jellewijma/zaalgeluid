@@ -219,6 +219,67 @@ test('upload is local-player-only; audio supports byte ranges and stays on disk 
   assert.deepEqual(await (await fetch(`${baseUrl}/api/tracks`, { headers: headers(setup.token) })).json(), [])
 })
 
+test('renaming requires the local player and validates names without changing the library', async () => {
+  const track = await upload()
+  for (const token of [undefined, 'invalid', controllerToken]) {
+    const denied = await fetch(`${baseUrl}/api/tracks/${track.id}`, {
+      method: 'PATCH', headers: jsonHeaders(token), body: JSON.stringify({ name: 'Changed' }),
+    })
+    assert.equal(denied.status, 403)
+  }
+  for (const name of [undefined, null, 42, '', ' \t\n ', 'a'.repeat(201)]) {
+    const invalid = await fetch(`${baseUrl}/api/tracks/${track.id}`, {
+      method: 'PATCH', headers: jsonHeaders(setup.token), body: JSON.stringify({ name }),
+    })
+    assert.equal(invalid.status, 400)
+  }
+  const missing = await fetch(`${baseUrl}/api/tracks/missing`, {
+    method: 'PATCH', headers: jsonHeaders(setup.token), body: JSON.stringify({ name: 'Changed' }),
+  })
+  assert.equal(missing.status, 404)
+  assert.deepEqual(await (await fetch(`${baseUrl}/api/tracks`, { headers: headers(setup.token) })).json(), [track])
+  const maximum = await fetch(`${baseUrl}/api/tracks/${track.id}`, {
+    method: 'PATCH', headers: jsonHeaders(setup.token), body: JSON.stringify({ name: ` ${'a'.repeat(200)} ` }),
+  })
+  assert.equal(maximum.status, 200)
+  assert.equal(((await maximum.json()) as Track).name, 'a'.repeat(200))
+})
+
+test('renaming playing and queued audio persists and broadcasts without changing playback or media', async () => {
+  const tracks = [await upload('Liedje.wav'), await upload('Volgende.wav'), await upload('Effect.wav', undefined, 'effect')]
+  const player = await openSocket(setup.token)
+  const controller = await openSocket(controllerToken)
+  const playback: Playback = { ...initialPlayback, ready: true, status: 'playing', trackId: tracks[0]!.id,
+    currentTime: 7, duration: 20, queue: [tracks[1]!.id], effectTrackId: tracks[2]!.id, effectStatus: 'playing' }
+  await report(player, playback)
+  const savedBefore = JSON.parse(await readFile(path.join(dataDir, 'library.json'), 'utf8')) as Array<Track & { storedFilename: string }>
+  for (const [index, track] of tracks.entries()) {
+    const name = `Nieuwe naam ${index + 1}`
+    const broadcast = waitMessage(controller, (message) => message.type === 'state'
+      && message.state.tracks.some((item) => item.id === track.id && item.name === name))
+    const renamed = await fetch(`${baseUrl}/api/tracks/${track.id}`, {
+      method: 'PATCH', headers: jsonHeaders(setup.token), body: JSON.stringify({ name: `  ${name}  ` }),
+    })
+    assert.equal(renamed.status, 200)
+    assert.deepEqual(await renamed.json(), { ...track, name })
+    const message = await broadcast
+    assert.deepEqual(message.type === 'state' && message.state.playback, playback)
+    const audio = await fetch(`${baseUrl}/api/audio/${track.id}?token=${setup.token}`)
+    assert.equal(audio.status, 200)
+    assert.equal(await audio.text(), '0123456789audio-data')
+  }
+  const renamedTracks = tracks.map((track, index) => ({ ...track, name: `Nieuwe naam ${index + 1}` }))
+  const savedAfter = JSON.parse(await readFile(path.join(dataDir, 'library.json'), 'utf8'))
+  assert.deepEqual(savedAfter, savedBefore.map((track, index) => ({ ...track, name: renamedTracks[index]!.name })))
+  for (const socket of sockets.splice(0)) socket.terminate()
+  await instance.close()
+  instance = await createAppServer({ dataDir, port: 0, host: '127.0.0.1' })
+  const { port } = await instance.listen()
+  baseUrl = `http://127.0.0.1:${port}`
+  setup = await (await fetch(`${baseUrl}/api/setup`)).json() as Setup
+  assert.deepEqual(await (await fetch(`${baseUrl}/api/tracks`, { headers: headers(setup.token) })).json(), renamedTracks)
+})
+
 test('clearing the final selected track relays to the player and permits removal after acknowledgement', async () => {
   const track = await upload()
   const player = await openSocket(setup.token)

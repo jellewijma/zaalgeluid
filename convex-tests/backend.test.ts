@@ -365,6 +365,44 @@ describe("lease fencing and command delivery", () => {
 });
 
 describe("durable file safety", () => {
+  it("allows only the owning player to rename audio and rejects invalid names", async () => {
+    const { t, owner, stranger, music } = await fixture();
+    const anotherOwner = await googleUser(t, "rename-other-player", "other@gmail.com");
+    await expect(t.mutation(api.files.rename, { trackId: music.id, name: "Changed" })).rejects.toThrow("beheerder");
+    await expect(stranger.mutation(api.files.rename, { trackId: music.id, name: "Changed" })).rejects.toThrow("beheerder");
+    await expect(anotherOwner.client.mutation(api.files.rename, { trackId: music.id, name: "Changed" })).rejects.toThrow("Geen toegang");
+    await expect(owner.mutation(api.files.rename, { trackId: "missing", name: "Changed" })).rejects.toThrow("Geen toegang");
+    for (const name of ["", " \t\n ", "a".repeat(201)]) {
+      await expect(owner.mutation(api.files.rename, { trackId: music.id, name })).rejects.toThrow("maximaal 200");
+    }
+    expect((await owner.query(api.files.list, {})).find(track => track.id === music.id)).toEqual(music);
+    await owner.mutation(api.files.rename, { trackId: music.id, name: ` ${"a".repeat(200)} ` });
+    expect((await owner.query(api.files.list, {})).find(track => track.id === music.id)?.name).toBe("a".repeat(200));
+  });
+
+  it("persists renamed playing audio for controllers without changing playback, commands, or storage", async () => {
+    const { t, owner, music, effect } = await fixture();
+    const playback = { ...initialPlayback, ready: true, status: "playing" as const, trackId: music.id,
+      queue: [music.id], currentTime: 7, duration: 20, effectTrackId: effect.id, effectStatus: "playing" as const };
+    await owner.mutation(api.rooms.reportPlayback, { clientId: CLIENT, playback, ackSequence: 0 });
+    await owner.mutation(api.rooms.sendCommand, { command: { action: "select", trackId: music.id }, sentAt: Date.now() });
+    await t.mutation(api.rooms.pair, { pin: PIN, token: TOKEN });
+    const urls = await owner.query(api.files.mediaUrls, {});
+    const pending = await owner.query(api.rooms.pendingCommands, { clientId: CLIENT, afterSequence: 0 });
+    const before = await t.run(ctx => ctx.db.query("media").collect());
+    for (const track of [music, effect]) {
+      await owner.mutation(api.files.rename, { trackId: track.id, name: `  Nieuwe ${track.name}  ` });
+    }
+    const tracks = [music, effect].map(track => ({ ...track, name: `Nieuwe ${track.name}` }));
+    expect(await owner.query(api.files.list, {})).toEqual(tracks);
+    const controllerState = await t.query(api.rooms.state, { token: TOKEN });
+    expect(controllerState?.tracks).toEqual(tracks);
+    expect(controllerState?.playback).toEqual(playback);
+    expect(await owner.query(api.files.mediaUrls, {})).toEqual(urls);
+    expect(await owner.query(api.rooms.pendingCommands, { clientId: CLIENT, afterSequence: 0 })).toEqual(pending);
+    expect(await t.run(ctx => ctx.db.query("media").collect())).toEqual(before.map(file => ({ ...file, name: `Nieuwe ${file.name}` })));
+  });
+
   it("rejects unauthorized finalization and invalid names, and deduplicates storage references", async () => {
     const { t, owner, stranger, storageId, music } = await fixture();
     await expect(stranger.mutation(api.files.finishUpload, { storageId, name: "Stolen", filename: "stolen.mp3", kind: "music" })).rejects.toThrow("beheerder");

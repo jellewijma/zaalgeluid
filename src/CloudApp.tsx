@@ -195,6 +195,7 @@ function CloudPlayer({ onInvalidSession, onPasswordChanged }: { onInvalidSession
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
   const finishUpload = useMutation(api.files.finishUpload);
   const remove = useMutation(api.files.remove);
+  const rename = useMutation(api.files.rename);
   const revokeControllers = useMutation(api.rooms.revokeControllers);
   async function upload(files: File[], kind: "music" | "effect") {
     let completed = 0;
@@ -215,7 +216,11 @@ function CloudPlayer({ onInvalidSession, onPasswordChanged }: { onInvalidSession
     try { await remove({ trackId: id }); }
     catch { throw new Error("Verwijderen is niet gelukt. Haal het bestand uit de afspeellijst en wis de selectie, of stop het effect. Probeer het daarna opnieuw."); }
   }
-  return <PlayerConsole {...room} token="" cloud onUpload={upload} onRemove={removeTrack} revokeControllers={async () => { await revokeControllers({}); }} account={<AccountControls onPasswordChanged={onPasswordChanged} />} />;
+  async function renameTrack(id: string, name: string) {
+    try { await rename({ trackId: id, name }); }
+    catch { throw new Error("Naam wijzigen is niet gelukt. Controleer je verbinding en probeer het opnieuw."); }
+  }
+  return <PlayerConsole {...room} token="" cloud onUpload={upload} onRemove={removeTrack} onRename={renameTrack} revokeControllers={async () => { await revokeControllers({}); }} account={<AccountControls onPasswordChanged={onPasswordChanged} />} />;
 }
 
 function AccountControls({ onPasswordChanged }: { onPasswordChanged: () => void }) {

@@ -93,13 +93,15 @@
 .account-notice {
   color: var(--primary) !important;
 }
-.guest-logout-overlay {
+.guest-logout-overlay,
+.rename-overlay {
   position: fixed;
   inset: 0;
   z-index: 100;
   background: rgb(0 0 0 / 65%);
 }
-.guest-logout-dialog {
+.guest-logout-dialog,
+.rename-dialog {
   position: fixed;
   top: 50%;
   left: 50%;
@@ -115,12 +117,14 @@
   color: var(--foreground);
   box-shadow: 0 16px 48px rgb(0 0 0 / 24%);
 }
-.guest-logout-dialog h2 {
+.guest-logout-dialog h2,
+.rename-dialog h2 {
   font-size: 20px;
   font-weight: 600;
   line-height: 1.4;
 }
-.guest-logout-dialog > p {
+.guest-logout-dialog > p,
+.rename-dialog > p {
   margin-top: 12px;
   font-size: 14px;
   line-height: 1.7;
@@ -129,15 +133,38 @@
 .guest-logout-dialog > .error-note {
   color: var(--error-text);
 }
-.guest-logout-actions {
+.guest-logout-actions,
+.rename-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
   margin-top: 24px;
 }
-.guest-logout-actions > button {
+.guest-logout-actions > button,
+.rename-actions > button {
   min-height: 44px;
+}
+.rename-dialog label {
+  display: block;
+  margin: 20px 0 8px;
+  font-size: 13px;
+}
+.rename-dialog input {
+  min-height: 44px;
+}
+.rename-dialog .error-note {
+  margin-top: 12px;
+}
+.rename-progress {
+  margin-top: 12px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.rename-track {
+  min-width: 40px;
+  min-height: 40px;
+  color: var(--muted-foreground);
 }
 
 @theme inline {
@@ -1425,7 +1452,7 @@ p {
 @media (max-width: 600px) {
   .library-switcher { padding-inline: 12px; }
   .effect-controls { padding-inline: 17px; }
-  .queue-toggle { flex-shrink: 0; min-width: 44px; min-height: 44px; }
+  .queue-toggle, .rename-track { flex-shrink: 0; min-width: 44px; min-height: 44px; }
   .playlist-transport { flex-wrap: wrap; }
   .playlist-transport small { max-width: 130px; }
 }

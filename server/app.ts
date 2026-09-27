@@ -222,6 +222,18 @@ export async function createAppServer(options: ServerOptions = {}) {
       }).catch(next)
     })
   })
+  app.patch(at('/api/tracks/:id'), localPlayer, (request, response, next) => {
+    const name = typeof request.body?.name === 'string' ? request.body.name.trim() : ''
+    if (!name || name.length > 200) return response.status(400).json({ error: 'Vul een naam van maximaal 200 tekens in.' })
+    void mutate(async () => {
+      const track = library.find((item) => item.id === request.params.id)
+      if (!track) return response.status(404).json({ error: 'Dit audiofragment bestaat niet meer.' })
+      const renamed = { ...track, name }
+      await saveLibrary(library.map((item) => item.id === track.id ? renamed : item))
+      broadcast()
+      response.json(publicTrack(renamed))
+    }).catch(next)
+  })
   app.delete(at('/api/tracks/:id'), localPlayer, (request, response, next) => {
     void mutate(async () => {
       const track = library.find((item) => item.id === request.params.id)

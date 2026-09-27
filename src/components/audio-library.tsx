@@ -1,6 +1,8 @@
-import { useRef, useState } from 'react'
-import { AudioLines, Check, FileAudio2, ListMusic, LoaderCircle, Plus, Square, Trash2, X, Zap } from 'lucide-react'
+import { useId, useRef, useState } from 'react'
+import { AudioLines, Check, FileAudio2, ListMusic, LoaderCircle, Pencil, Plus, Square, Trash2, X, Zap } from 'lucide-react'
+import { Dialog } from 'radix-ui'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Slider } from '@/components/ui/slider'
 import { appPath } from '@/lib/paths'
 import { cn, formatSize } from '@/lib/utils'
@@ -16,6 +18,7 @@ interface Props {
   cloud?: boolean
   onUpload?: (files: File[], kind: 'music' | 'effect') => Promise<void>
   onRemove?: (id: string) => Promise<void>
+  onRename?: (id: string, name: string) => Promise<void>
 }
 
 async function checked(response: Response) {
@@ -31,7 +34,7 @@ export function AudioLibrary(props: Props) {
   </>
 }
 
-function LibrarySection({ tracks, playback, token, ready, online, command, kind, onUpload, onRemove }: Props & { kind: 'music' | 'effect' }) {
+function LibrarySection({ tracks, playback, token, ready, online, command, kind, onUpload, onRemove, onRename }: Props & { kind: 'music' | 'effect' }) {
   const input = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -83,6 +86,22 @@ function LibrarySection({ tracks, playback, token, ready, online, command, kind,
     } finally { setDeleting(null) }
   }
 
+  async function rename(id: string, name: string) {
+    setError('')
+    try {
+      if (onRename) await onRename(id, name)
+      else await checked(await fetch(appPath(`/api/tracks/${encodeURIComponent(id)}`), {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      }))
+    } catch (cause) {
+      // Keep failures visible in the list if the editor was closed during saving.
+      setError(cause instanceof Error ? cause.message : 'Naam wijzigen is niet gelukt. Probeer het opnieuw.')
+      throw cause
+    }
+  }
+
   return <section className={cn('library panel', effects && 'effects-library')} aria-label={effects ? 'Geluidseffecten' : 'Liedjes en afspeellijst'}>
     <div className="library-heading">
       <div>
@@ -121,7 +140,7 @@ function LibrarySection({ tracks, playback, token, ready, online, command, kind,
         <button className="track-select" disabled={!ready} onClick={() => command({ action: effects ? 'effect-play' : 'select', trackId: track.id })}
           aria-label={`${track.name} ${effects ? 'afspelen' : 'klaarzetten'}`} aria-pressed={selected}>
           <span className="track-number">{effects ? <Zap size={18} /> : selected ? <AudioLines size={19} /> : String(index + 1).padStart(2, '0')}</span>
-          <span className="track-info"><strong>{track.name}</strong><span>{track.filename.split('.').at(-1)?.toUpperCase()} · {formatSize(track.size)}</span></span>
+          <span className="track-info"><strong title={track.name}>{track.name}</strong><span>{track.filename.split('.').at(-1)?.toUpperCase()} · {formatSize(track.size)}</span></span>
           {selected && <span className="selected-label"><Check size={14} />{effects ? 'Speelt' : 'Klaargezet'}</span>}
         </button>
         {!effects && <Button size="icon" variant="ghost" className="queue-toggle" disabled={!ready || (!queued && playback.queue.length >= 200)}
@@ -130,6 +149,7 @@ function LibrarySection({ tracks, playback, token, ready, online, command, kind,
           onClick={() => command({ action: queued ? 'queue-remove' : 'queue-add', trackId: track.id })}>
           {queued ? <Check size={17} /> : <Plus size={17} />}
         </Button>}
+        <RenameTrack track={track} online={online} disabled={!!deleting} onRename={rename} />
         <div className="delete-action">{confirmDelete === track.id ? <>
           <Button variant="ghost" size="sm" disabled={!!deleting || protectedTrack || !online} aria-label={`${track.name} definitief verwijderen`} onClick={() => void remove(track.id)}>Verwijderen</Button>
           <Button variant="ghost" size="icon" aria-label="Verwijderen annuleren" onClick={() => setConfirmDelete(null)}><X /></Button>
@@ -139,4 +159,69 @@ function LibrarySection({ tracks, playback, token, ready, online, command, kind,
     })}</ul>}
     {effects && <p className="library-footnote">Eén effect tegelijk. Opnieuw aanklikken herstart het effect.</p>}
   </section>
+}
+
+function RenameTrack({ track, online, disabled, onRename }: {
+  track: Track
+  online: boolean
+  disabled: boolean
+  onRename: (id: string, name: string) => Promise<void>
+}) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState(track.name)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const input = useRef<HTMLInputElement>(null)
+  const inputId = useId()
+  const errorId = useId()
+
+  async function save() {
+    const cleanName = name.trim()
+    if (saving || !online || !cleanName || cleanName.length > 200) return
+    setSaving(true)
+    setError('')
+    try {
+      await onRename(track.id, cleanName)
+      setOpen(false)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Naam wijzigen is niet gelukt. Probeer het opnieuw.')
+    } finally { setSaving(false) }
+  }
+
+  return <Dialog.Root open={open} onOpenChange={next => {
+    if (next && saving) return
+    if (next) { setName(track.name); setError('') }
+    setOpen(next)
+  }}>
+    <Dialog.Trigger asChild>
+      <Button variant="ghost" size="icon" className="rename-track" disabled={!online || disabled} aria-disabled={saving || undefined}
+        aria-label={`${track.name} hernoemen`} title={saving ? 'Naam opslaan…' : 'Naam wijzigen'}>
+        {saving ? <LoaderCircle className="spin" /> : <Pencil size={16} />}
+      </Button>
+    </Dialog.Trigger>
+    <Dialog.Portal>
+      <Dialog.Overlay className="rename-overlay" />
+      <Dialog.Content className="rename-dialog" onOpenAutoFocus={event => {
+        event.preventDefault()
+        input.current?.focus()
+        input.current?.select()
+      }}>
+        <Dialog.Title>Naam wijzigen</Dialog.Title>
+        <Dialog.Description>Geef dit bestand een herkenbare naam in je lijst.</Dialog.Description>
+        <form onSubmit={event => { event.preventDefault(); void save() }} aria-busy={saving}>
+          <label htmlFor={inputId}>Naam</label>
+          <Input ref={input} id={inputId} value={name} onChange={event => setName(event.target.value)} required maxLength={200}
+            disabled={saving} aria-describedby={error ? errorId : undefined} />
+          {error && <p id={errorId} className="error-note" role="alert">{error}</p>}
+          {saving && <p className="rename-progress" role="status">Opslaan gaat door als je dit venster sluit.</p>}
+          <div className="rename-actions">
+            <Dialog.Close asChild><Button type="button" variant="outline">{saving ? 'Sluiten' : 'Annuleren'}</Button></Dialog.Close>
+            <Button type="submit" disabled={saving || !online || !name.trim() || name.trim().length > 200}>
+              {saving && <LoaderCircle className="spin" />}{saving ? 'Opslaan…' : 'Opslaan'}
+            </Button>
+          </div>
+        </form>
+      </Dialog.Content>
+    </Dialog.Portal>
+  </Dialog.Root>
 }

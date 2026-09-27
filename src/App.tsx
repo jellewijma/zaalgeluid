@@ -344,11 +344,12 @@ interface PlayerConsoleProps {
   account?: ReactNode;
   onUpload?: (files: File[], kind: "music" | "effect") => Promise<void>;
   onRemove?: (id: string) => Promise<void>;
+  onRename?: (id: string, name: string) => Promise<void>;
 }
 
 export function PlayerConsole({
   state, connection, command, enable, error, clearError, token, setup,
-  cloud = false, takeover, refreshPin, revokeControllers, account, onUpload, onRemove,
+  cloud = false, takeover, refreshPin, revokeControllers, account, onUpload, onRemove, onRename,
 }: PlayerConsoleProps) {
   const [activating, setActivating] = useState(false);
   const [takingOver, setTakingOver] = useState(false);
@@ -482,6 +483,7 @@ export function PlayerConsole({
               cloud={cloud}
               onUpload={onUpload}
               onRemove={onRemove}
+              onRename={onRename}
             />
           </div>
           {(setup || account) && (
