@@ -1,10 +1,11 @@
 import { Password } from "@convex-dev/auth/providers/Password";
+import { Anonymous } from "@convex-dev/auth/providers/Anonymous";
 import { convexAuth } from "@convex-dev/auth/server";
 import Google from "@auth/core/providers/google";
 import { createAuthUser, googleConfigured, googleProfile, playerRedirect } from "./auth_policy";
 
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
-  providers: [Password({
+  providers: [Anonymous, Password({
     profile(params) {
       const login = process.env.OWNER_LOGIN?.trim().toLowerCase();
       if (!login || params.flow !== "signIn" || typeof params.email !== "string" ||

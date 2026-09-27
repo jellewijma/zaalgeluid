@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { generateKeyPairSync } from "node:crypto";
+import type { Value } from "convex/values";
 import { convexTest } from "convex-test";
 import schema from "../convex/schema";
 import { api, internal } from "../convex/_generated/api";
@@ -11,6 +13,11 @@ const CLIENT = "player_abcdefghijklmnop";
 const OTHER_CLIENT = "player_otherabcdefghijk";
 const TOKEN = "a".repeat(64);
 const PIN = "123456";
+const { privateKey: testSigningKey } = generateKeyPairSync("rsa", {
+  modulusLength: 2048,
+  privateKeyEncoding: { type: "pkcs8", format: "pem" },
+  publicKeyEncoding: { type: "spki", format: "pem" },
+});
 
 async function fixture() {
   const t = convexTest({ schema, modules, transactionLimits: true });
@@ -36,6 +43,7 @@ beforeEach(() => {
   vi.stubEnv("SITE_URL", "https://jellewijma.com/play-audio");
   vi.stubEnv("AUTH_GOOGLE_ID", "");
   vi.stubEnv("AUTH_GOOGLE_SECRET", "");
+  vi.stubEnv("JWT_PRIVATE_KEY", testSigningKey);
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-09-13T12:00:00Z"));
 });
@@ -52,15 +60,103 @@ async function googleUser(t: Awaited<ReturnType<typeof fixture>>["t"], subject: 
   return { id: userId, client: t.withIdentity({ subject: `${userId}|google-session` }) };
 }
 
+function tokenSubject(token: string) {
+  return (JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString()) as { sub: string }).sub;
+}
+
+async function guestUser(t: Awaited<ReturnType<typeof fixture>>["t"], params: Record<string, Value> = {}) {
+  const result = await t.action(api.auth.signIn, { provider: "anonymous", params });
+  if (!result.tokens) throw new Error("Expected a guest session");
+  const subject = tokenSubject(result.tokens.token);
+  const client = t.withIdentity({ subject });
+  return { client, subject, tokens: result.tokens };
+}
+
+describe("guest identity and private libraries", () => {
+  it("creates guests through the public provider without trusting supplied identity fields, and refreshes the same user", async () => {
+    const { t, ownerId } = await fixture();
+    const alice = await guestUser(t, {
+      isAnonymous: false, email: "jelle", emailVerified: true, name: "Jelle", userId: ownerId,
+      providerAccountId: "jelle", profile: { isAnonymous: false, email: "jelle" },
+    });
+    const bob = await guestUser(t);
+    expect(alice.subject.split("|")[0]).not.toBe(bob.subject.split("|")[0]);
+    expect(alice.subject.split("|")[0]).not.toBe(ownerId);
+    expect(await alice.client.query(api.account.current, {})).toEqual({ name: "Gast", email: "", canChangePassword: false, isGuest: true });
+    const accounts = await t.run(ctx => ctx.db.query("authAccounts").take(10));
+    const anonymous = accounts.filter(account => account.provider === "anonymous");
+    expect(anonymous).toHaveLength(2);
+    expect(new Set(anonymous.map(account => account.providerAccountId)).size).toBe(2);
+    expect(anonymous.every(account => account.emailVerified === undefined)).toBe(true);
+    const refreshed = await t.action(api.auth.signIn, { refreshToken: alice.tokens.refreshToken });
+    expect(refreshed.tokens).not.toBeNull();
+    expect(tokenSubject(refreshed.tokens!.token)).toBe(alice.subject);
+    await alice.client.action(api.auth.signOut, {});
+    const signedOut = await t.action(api.auth.signIn, { refreshToken: refreshed.tokens!.refreshToken });
+    expect(signedOut.tokens).toBeNull();
+    const newSession = await guestUser(t);
+    expect(newSession.subject.split("|")[0]).not.toBe(alice.subject.split("|")[0]);
+  });
+
+  it("requires a server-created anonymous account as well as its marker and denies forged identity claims", async () => {
+    const { t, ownerId, stranger } = await fixture();
+    const [markerOnly, accountOnly] = await t.run(async ctx => {
+      const marker = await ctx.db.insert("users", { isAnonymous: true });
+      const account = await ctx.db.insert("users", {});
+      await ctx.db.insert("authAccounts", { userId: account, provider: "anonymous", providerAccountId: "missing-marker" });
+      return [marker, account];
+    });
+    for (const id of [markerOnly, accountOnly]) {
+      const forged = t.withIdentity({ subject: `${id}|session`, isAnonymous: true, email: "jelle", emailVerified: true });
+      expect(await forged.query(api.account.current, {})).toBeNull();
+      await expect(forged.mutation(api.rooms.claimPlayer, { sentAt: Date.now(), clientId: CLIENT, pin: PIN })).rejects.toThrow("beheerder");
+    }
+    expect(await stranger.query(api.account.current, {})).toBeNull();
+    for (const profile of [{}, { isAnonymous: "true" }, { isAnonymous: false, email: "jelle" }]) {
+      await expect(t.run(ctx => createAuthUser(ctx, { provider: { id: "anonymous" }, existingUserId: null, profile }))).rejects.toThrow("Gastaanmelding");
+    }
+    await expect(t.run(ctx => createAuthUser(ctx, { provider: { id: "anonymous" }, existingUserId: ownerId, profile: { isAnonymous: true } }))).rejects.toThrow("Gastaanmelding");
+  });
+
+  it("isolates two guest rooms and their media from each other, Google accounts and the legacy owner", async () => {
+    const { t, owner, music } = await fixture();
+    const alice = await guestUser(t);
+    const bob = await guestUser(t);
+    const google = await googleUser(t, "google-guest-neighbour", "neighbour@gmail.com");
+    const aliceRoom = await alice.client.mutation(api.rooms.claimPlayer, { clientId: CLIENT, pin: "246810", sentAt: Date.now() });
+    const bobRoom = await bob.client.mutation(api.rooms.claimPlayer, { clientId: CLIENT, pin: "246810", sentAt: Date.now() });
+    expect(aliceRoom.roomId).not.toBe(bobRoom.roomId);
+    const storageId = await t.run(ctx => ctx.storage.store(new Blob(["guest song"], { type: "audio/mpeg" })));
+    const song = await alice.client.mutation(api.files.finishUpload, { storageId, name: "Guest song", filename: "guest.mp3", kind: "music" });
+    for (const neighbour of [bob.client, google.client, owner]) {
+      expect((await neighbour.query(api.files.list, {})).some(track => track.id === song.id)).toBe(false);
+      expect(await neighbour.query(api.files.mediaUrls, {})).not.toHaveProperty(song.id);
+      await expect(neighbour.mutation(api.files.remove, { trackId: song.id })).rejects.toThrow("Geen toegang");
+      await expect(neighbour.mutation(api.files.finishUpload, { storageId, name: "Stolen", filename: "stolen.mp3", kind: "music" })).rejects.toThrow("Geen toegang");
+    }
+    expect((await owner.query(api.files.list, {}))[0].id).toBe(music.id);
+    await alice.client.mutation(api.rooms.reportPlayback, { clientId: CLIENT, playback: { ...initialPlayback, ready: true }, ackSequence: 0 });
+    await bob.client.mutation(api.rooms.reportPlayback, { clientId: CLIENT, playback: { ...initialPlayback, ready: true }, ackSequence: 0 });
+    await expect(bob.client.mutation(api.rooms.sendCommand, { command: { action: "select", trackId: song.id }, sentAt: Date.now() })).rejects.toThrow("beschikbaar");
+    expect((await t.mutation(api.rooms.pair, { roomId: aliceRoom.roomId, pin: "246810", token: TOKEN })).ok).toBe(true);
+    await t.mutation(api.rooms.sendCommand, { token: TOKEN, command: { action: "stop" }, sentAt: Date.now() });
+    expect(await alice.client.query(api.rooms.pendingCommands, { clientId: CLIENT, afterSequence: 0 })).toHaveLength(1);
+    expect(await bob.client.query(api.rooms.pendingCommands, { clientId: CLIENT, afterSequence: 0 })).toEqual([]);
+    await bob.client.mutation(api.rooms.revokeControllers, {});
+    expect(await t.query(api.rooms.state, { token: TOKEN })).not.toBeNull();
+    await expect(alice.client.action(api.account.changePassword, { currentPassword: "anything", newPassword: "sufficient-password" })).rejects.toThrow("beheerder");
+  });
+});
+
 describe("Google identity and private libraries", () => {
   it("requires a configured provider and verified Google subject without exposing configuration values", async () => {
     const { t } = await fixture();
-    expect(await t.query(api.account.authMethods, {})).toEqual({ google: false, password: true });
+    expect(await t.query(api.account.authMethods, {})).toEqual({ google: false, password: true, guest: true });
     await expect(t.action(api.auth.signIn, { provider: "google", params: {} })).rejects.toThrow("google");
     vi.stubEnv("AUTH_GOOGLE_ID", "example-client");
     expect(googleConfigured()).toBe(false);
     vi.stubEnv("AUTH_GOOGLE_SECRET", "example-secret");
-    expect(await t.query(api.account.authMethods, {})).toEqual({ google: true, password: true });
+    expect(await t.query(api.account.authMethods, {})).toEqual({ google: true, password: true, guest: true });
     for (const bad of [
       { sub: "subject", email: "person@gmail.com", email_verified: false },
       { sub: "subject", email: "person@gmail.com", email_verified: "true" },
@@ -89,7 +185,7 @@ describe("Google identity and private libraries", () => {
     const { t, owner, ownerId, stranger, music } = await fixture();
     expect(await t.query(api.account.current, {})).toBeNull();
     expect(await stranger.query(api.account.current, {})).toBeNull();
-    expect(await owner.query(api.account.current, {})).toEqual({ name: "jelle", email: "jelle", canChangePassword: true });
+    expect(await owner.query(api.account.current, {})).toEqual({ name: "jelle", email: "jelle", canChangePassword: true, isGuest: false });
     const first = await googleUser(t, "google-first-subject", "jelle");
     const second = await googleUser(t, "google-second-subject", "jelle");
     expect(first.id).not.toBe(ownerId);
