@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { AudioLines, Check, FileAudio2, ListMusic, LoaderCircle, Plus, ShieldCheck, Square, Trash2, X, Zap } from 'lucide-react'
+import { AudioLines, Check, FileAudio2, ListMusic, LoaderCircle, Plus, Square, Trash2, X, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import { appPath } from '@/lib/paths'
@@ -31,7 +31,7 @@ export function AudioLibrary(props: Props) {
   </>
 }
 
-function LibrarySection({ tracks, playback, token, ready, online, command, kind, cloud = false, onUpload, onRemove }: Props & { kind: 'music' | 'effect' }) {
+function LibrarySection({ tracks, playback, token, ready, online, command, kind, onUpload, onRemove }: Props & { kind: 'music' | 'effect' }) {
   const input = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -87,7 +87,7 @@ function LibrarySection({ tracks, playback, token, ready, online, command, kind,
     <div className="library-heading">
       <div>
         <h2>{effects ? 'Geluidseffecten' : 'Liedjes'} <span className="track-count">{available.length}</span></h2>
-        <p>{effects ? 'Tik om direct over de muziek heen af te spelen.' : 'Zet een liedje klaar of voeg meerdere toe aan je afspeellijst.'}</p>
+        <p>{effects ? 'Effecten spelen direct over de muziek heen.' : 'Klik op een liedje om het klaar te zetten.'}</p>
       </div>
       <input ref={input} type="file" multiple accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac,.aac,.webm,.opus" className="sr-only" tabIndex={-1}
         aria-label={effects ? 'Geluidseffecten toevoegen' : 'Audiobestanden toevoegen'} onChange={event => void upload(event.target.files)} />
@@ -101,7 +101,7 @@ function LibrarySection({ tracks, playback, token, ready, online, command, kind,
       {showQueue && queue.length > 0 && <Button className="queue-clear" size="sm" variant="ghost" disabled={!ready} onClick={() => command({ action: 'queue-clear' })}>Lijst leegmaken</Button>}
     </div>}
     {effects && <div className="effect-controls">
-      <div className="effect-current" role="status"><Zap size={17} /><span>{effectActive && activeEffect ? `${playback.effectStatus === 'loading' ? 'Laden' : 'Speelt'}: ${activeEffect.name}` : 'Klaar voor een effect'}</span></div>
+      <div className="effect-current" role="status"><Zap size={17} /><span>{effectActive && activeEffect ? `${playback.effectStatus === 'loading' ? 'Laden' : 'Speelt'}: ${activeEffect.name}` : 'Geen effect actief'}</span></div>
       <Button variant="outline" size="sm" disabled={!online || (!playback.effectTrackId && !playback.effectError)} onClick={() => command({ action: 'effect-stop' })}><Square /> Effect stoppen</Button>
       <div className="effect-volume"><label id="effect-volume-label">Effectvolume <span>{Math.round(playback.effectVolume * 100)}%</span></label>
         <Slider aria-labelledby="effect-volume-label" value={[Math.round(playback.effectVolume * 100)]} max={100} step={1} disabled={!ready} onValueChange={([value]) => command({ action: 'effect-volume', value: value / 100 })} />
@@ -110,8 +110,8 @@ function LibrarySection({ tracks, playback, token, ready, online, command, kind,
     {(error || (effects && playback.effectError)) && <p className="library-error" role="alert">{error || playback.effectError}</p>}
     {visible.length === 0 ? <div className="empty-library">
       {effects ? <Zap size={27} /> : showQueue ? <ListMusic size={27} /> : <FileAudio2 size={27} />}
-      <h3>{effects ? 'Je effecten, direct onder de knop.' : showQueue ? 'Kies meerdere liedjes.' : 'Jouw liedjes, hier bij elkaar.'}</h3>
-      <p>{effects ? 'Voeg je eigen geluidseffecten toe vanaf deze pc.' : showQueue ? 'Gebruik de plus naast een liedje. De volgorde van toevoegen is de afspeelvolgorde.' : 'Selecteer één of meerdere audiobestanden van deze pc.'}</p>
+      <h3>{effects ? 'Geen geluidseffecten' : showQueue ? 'Afspeellijst is leeg' : 'Geen liedjes'}</h3>
+      <p>{showQueue ? 'Voeg liedjes toe met de plus. Ze spelen in de volgorde van toevoegen.' : 'Voeg audiobestanden toe vanaf deze pc.'}</p>
       {!showQueue && <span>MP3, WAV, M4A en meer · tot 500 MB per bestand</span>}
     </div> : <ul className="track-list">{visible.map((track, index) => {
       const queued = playback.queue.includes(track.id)
@@ -137,6 +137,6 @@ function LibrarySection({ tracks, playback, token, ready, online, command, kind,
           title={protectedTrack ? 'Haal dit bestand uit de afspeellijst en wis de selectie, of stop het effect.' : 'Bestand verwijderen'} onClick={() => setConfirmDelete(track.id)}><Trash2 size={16} /></Button>}</div>
       </li>
     })}</ul>}
-    <div className="library-footnote"><ShieldCheck size={14} /><span>{effects ? 'Eén effect tegelijk. Opnieuw tikken start het effect opnieuw; de muziek blijft doorspelen.' : cloud ? 'Privé opgeslagen bij je account. Gekozen liedjes spelen na elkaar zodra je op Afspelen drukt.' : 'Bestanden worden op deze pc bewaard. Gekozen liedjes spelen na elkaar zodra je op Afspelen drukt.'}</span></div>
+    {effects && <p className="library-footnote">Eén effect tegelijk. Opnieuw aanklikken herstart het effect.</p>}
   </section>
 }

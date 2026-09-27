@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 
 test('login exposes only configured methods and keeps the password fallback keyboard accessible', async ({ page }, info) => {
   await page.goto('player')
-  await expect(page.getByRole('heading', { name: 'Meld je aan op de pc.' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Aanmelden' })).toBeVisible()
   await expect(page.getByText('Aanmeldopties laden…', { exact: true })).toHaveCount(0)
   const google = page.getByRole('button', { name: 'Doorgaan met Google', exact: true })
   if (await google.isVisible()) {
@@ -77,7 +77,7 @@ test('a new room pairing link does not reuse another room or legacy controller t
     sessionStorage.setItem(`${prefix}:room-other`, 'other-controller-session')
   }, storagePrefix)
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Neem de bediening over.' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Tablet koppelen' })).toBeVisible()
   await expect(page.getByLabel('Koppelcode', { exact: true })).toBeFocused()
   expect(await page.evaluate(prefix => ({
     legacy: sessionStorage.getItem(prefix),
@@ -95,6 +95,6 @@ test('an invalid OAuth callback code shows recovery instead of hanging on authen
   await expect(page.getByText('De aanmeldlink is verlopen of al gebruikt. Probeer opnieuw met je Google-account.')).toBeVisible()
   await page.getByRole('button', { name: 'Opnieuw aanmelden', exact: true }).focus()
   await page.keyboard.press('Enter')
-  await expect(page.getByRole('heading', { name: 'Meld je aan op de pc.', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Aanmelden', exact: true })).toBeVisible()
   expect(errors).toEqual([])
 })

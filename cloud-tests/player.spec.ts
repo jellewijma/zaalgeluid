@@ -50,7 +50,7 @@ async function media(page: Page) {
 
 async function login(page: Page) {
   await page.goto('player')
-  await expect(page.getByRole('heading', { name: 'Meld je aan op de pc.' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Aanmelden' })).toBeVisible()
   await expect(page.locator('.password-login')).toBeVisible()
   if (!await page.getByLabel('Gebruikersnaam', { exact: true }).isVisible()) await page.getByText('Aanmelden met wachtwoord', { exact: true }).click()
   await page.getByLabel('Gebruikersnaam', { exact: true }).fill(username)
@@ -60,7 +60,7 @@ async function login(page: Page) {
   await page.getByLabel('Wachtwoord', { exact: true }).press('Tab')
   await expect(page.getByRole('button', { name: 'Aanmelden', exact: true })).toBeFocused()
   await page.keyboard.press('Enter')
-  await expect(page.getByRole('heading', { name: 'Klaar voor jouw moment.' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Afspeler' })).toBeVisible()
 }
 
 async function screenshot(page: Page, name: string, info: TestInfo) {
@@ -91,7 +91,7 @@ test('online login, stored audio, tablet queue/effects and explicit second-PC ta
   const effect = `${prefix}-effect`
   try {
     await tablet.goto('player')
-    await expect(tablet.getByRole('heading', { name: 'Meld je aan op de pc.' })).toBeVisible()
+    await expect(tablet.getByRole('heading', { name: 'Aanmelden' })).toBeVisible()
     await expect(tablet.getByRole('button', { name: 'Liedjes toevoegen' })).toHaveCount(0)
     await login(first)
     // Recover only this development test session if an earlier interrupted run left a lease.
@@ -105,7 +105,7 @@ test('online login, stored audio, tablet queue/effects and explicit second-PC ta
     expect(controllerURL.pathname).toBe(new URL('control', baseURL).pathname)
     expect(controllerURL.searchParams.get('room')).toBeTruthy()
     await first.getByRole('button', { name: 'Audio activeren', exact: true }).click()
-    await expect(first.getByText('Afspeler verbonden en audio geactiveerd', { exact: true })).toBeVisible()
+    await expect(first.getByRole('slider', { name: 'Muziekvolume', exact: true })).toBeEnabled()
     await first.getByLabel('Audiobestanden toevoegen', { exact: true }).setInputFiles(songs.map(name => ({ name: `${name}.wav`, mimeType: 'audio/wav', buffer: audioFixture(30) })))
     for (const song of songs) await expect(first.getByRole('button', { name: `${song} klaarzetten`, exact: true })).toBeVisible()
     await first.getByLabel('Geluidseffecten toevoegen', { exact: true }).setInputFiles({ name: `${effect}.wav`, mimeType: 'audio/wav', buffer: audioFixture(10) })
@@ -182,7 +182,7 @@ test('online login, stored audio, tablet queue/effects and explicit second-PC ta
       await expect(second.getByRole('button', { name: `${name} verwijderen`, exact: true })).toHaveCount(0)
     }
     await second.getByRole('button', { name: 'Afmelden', exact: true }).click()
-    await expect(second.getByRole('heading', { name: 'Meld je aan op de pc.' })).toBeVisible()
+    await expect(second.getByRole('heading', { name: 'Aanmelden' })).toBeVisible()
     expect(pageErrors).toEqual([])
   } finally {
     for (const context of [tabletContext, secondContext, firstContext]) await context.close()
