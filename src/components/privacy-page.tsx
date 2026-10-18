@@ -10,7 +10,7 @@ export function PrivacyPage() {
       <div className="eyebrow">ZAALGELUID ONLINE</div>
       <h1>Privacy</h1>
       <p className="privacy-intro">Zaalgeluid laat je audio afspelen op een pc en bedienen vanaf een tablet. Hier lees je welke gegevens de online app daarvoor gebruikt.</p>
-      <p className="privacy-updated">Bijgewerkt op 27 september 2026 · Beheerder: Jelle Wijma</p>
+      <p className="privacy-updated">Bijgewerkt op 18 oktober 2026 · Beheerder: Jelle Wijma</p>
 
       <section aria-labelledby="privacy-account">
         <h2 id="privacy-account">Je account</h2>
@@ -32,7 +32,7 @@ export function PrivacyPage() {
 
       <section aria-labelledby="privacy-services">
         <h2 id="privacy-services">Diensten die de app gebruikt</h2>
-        <p>Vercel levert de website. Convex verwerkt accounts, aanmeldsessies, audio-opslag en de verbinding tussen pc en tablet. Google verzorgt de Google-aanmelding. Deze diensten ontvangen daarbij ook technische verbindingsgegevens, zoals je IP-adres. De app gebruikt je Google-profiel voor aanmelden en accountbeheer.</p>
+        <p>Vercel levert de website. Accounts, aanmeldsessies, audio en tabletbediening draaien op Appa, de eigen server van Jelle Wijma, met de opensourcesoftware van Convex. Tailscale verzorgt de beveiligde internetverbinding naar Appa. Google verzorgt de Google-aanmelding; het bestaande Convex Cloud-adres stuurt alleen die aanmeldverzoeken door naar Appa. Deze diensten ontvangen daarbij ook technische verbindingsgegevens, zoals je IP-adres. De app gebruikt je Google-profiel voor aanmelden en accountbeheer.</p>
         <p>Deze pagina gaat over de online app. De afzonderlijke lokale uitvoering slaat audio en instellingen op de pc op.</p>
       </section>
 

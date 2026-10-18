@@ -1,0 +1,17 @@
+[Unit]
+Description=Play Audio Convex HTTP gateway
+After=play-audio-convex.service
+Requires=play-audio-convex.service
+
+[Service]
+Type=simple
+ExecStart=/home/jelle/.local/bin/node /home/jelle/.local/share/play-audio-convex/gateway.mjs
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+
+[Install]
+WantedBy=default.target

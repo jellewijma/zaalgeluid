@@ -1,0 +1,16 @@
+[Unit]
+Description=Back up Play Audio Convex data and uploaded files
+After=play-audio-convex.service
+Requires=play-audio-convex.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/jelle/.local/share/play-audio-convex
+ExecStart=/usr/bin/python3 /home/jelle/.local/share/play-audio-convex/bin/backup.py
+TimeoutStartSec=50min
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/jelle/.local/share/play-audio-convex/backups
+

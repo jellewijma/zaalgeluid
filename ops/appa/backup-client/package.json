@@ -1,0 +1,7 @@
+{
+  "name": "play-audio-convex-backup",
+  "private": true,
+  "dependencies": {
+    "convex": "1.45.0"
+  }
+}

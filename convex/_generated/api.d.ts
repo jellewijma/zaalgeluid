@@ -12,6 +12,7 @@ import type * as access from "../access.js";
 import type * as account from "../account.js";
 import type * as auth from "../auth.js";
 import type * as auth_policy from "../auth_policy.js";
+import type * as auth_proxy from "../auth_proxy.js";
 import type * as cleanup from "../cleanup.js";
 import type * as crons from "../crons.js";
 import type * as files from "../files.js";
@@ -30,6 +31,7 @@ declare const fullApi: ApiFromModules<{
   account: typeof account;
   auth: typeof auth;
   auth_policy: typeof auth_policy;
+  auth_proxy: typeof auth_proxy;
   cleanup: typeof cleanup;
   crons: typeof crons;
   files: typeof files;

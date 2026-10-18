@@ -12,7 +12,7 @@
     "start": "tsx server/index.ts",
     "lint": "eslint .",
     "test": "tsx --test tests/*.test.ts",
-    "test:cloud": "vitest run convex-tests/backend.test.ts",
+    "test:cloud": "vitest run convex-tests/*.test.ts",
     "test:browser": "playwright test",
     "test:browser:cloud": "playwright test --config playwright.cloud.config.ts"
   },

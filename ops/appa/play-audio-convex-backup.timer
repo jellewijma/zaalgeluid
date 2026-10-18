@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily backup of Play Audio Convex
+
+[Timer]
+OnCalendar=*-*-* 04:15:00 Europe/Amsterdam
+RandomizedDelaySec=15min
+Persistent=true
+Unit=play-audio-convex-backup.service
+
+[Install]
+WantedBy=timers.target

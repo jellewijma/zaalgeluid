@@ -11,7 +11,9 @@ import "./index.css";
 
 const cloud = import.meta.env.VITE_APP_MODE === "cloud";
 const privacy = appRoute() === "/privacy";
-const convexUrl = import.meta.env.VITE_CONVEX_URL;
+const convexUrl = import.meta.env.VITE_CONVEX_BACKEND_URL || import.meta.env.VITE_CONVEX_URL;
+// Keep the existing namespace when the same accounts move to another backend.
+const authStorageNamespace = import.meta.env.VITE_AUTH_STORAGE_NAMESPACE || `${convexUrl}${appPath("/")}`;
 let convex: ConvexReactClient | null = null;
 if (cloud && convexUrl && !privacy) {
   try { convex = new ConvexReactClient(convexUrl); }
@@ -20,7 +22,7 @@ if (cloud && convexUrl && !privacy) {
 
 if (!initializePwa()) createRoot(document.getElementById("root")!).render(
   privacy ? <PrivacyPage /> : !cloud ? <App /> : convex ? (
-    <ConvexAuthProvider client={convex} storageNamespace={`${convexUrl}${appPath("/")}`} shouldHandleCode={false}>
+    <ConvexAuthProvider client={convex} storageNamespace={authStorageNamespace} shouldHandleCode={false}>
       <OAuthCallback><CloudApp /></OAuthCallback>
     </ConvexAuthProvider>
   ) : (

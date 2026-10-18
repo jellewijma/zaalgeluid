@@ -1,0 +1,3 @@
+release=precompiled-2026-10-10-72ce13c
+asset=convex-local-backend-x86_64-unknown-linux-gnu.zip
+binary_sha256=5584895149cd6af74624ccbc038b2ada14ec771b6374e4ce252080a115ba5255

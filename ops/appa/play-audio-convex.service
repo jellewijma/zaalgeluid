@@ -1,0 +1,21 @@
+[Unit]
+Description=Play Audio Convex backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/jelle/.local/share/play-audio-convex
+EnvironmentFile=/home/jelle/.config/play-audio-convex/backend.env
+ExecStart=/home/jelle/.local/share/play-audio-convex/bin/convex-local-backend --interface 127.0.0.1 --port 3210 --site-proxy-port 3211 --instance-name play-audio-appa --instance-secret ${INSTANCE_SECRET} --convex-origin https://appa.tailf12edd.ts.net:10000 --convex-site https://appa.tailf12edd.ts.net:10000/http --disable-beacon --redact-logs-to-client
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=60
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/jelle/.local/share/play-audio-convex
+
+[Install]
+WantedBy=default.target

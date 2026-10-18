@@ -2,7 +2,7 @@
 
 Een audioafspeler voor een pc aan een PA-systeem, met bediening vanaf een tablet. De pc speelt muziek en geluidseffecten af; de tablet stuurt de pc aan en toont de afspeelstatus.
 
-Er zijn twee uitvoeringen: online via Vercel en Convex, en lokaal via de meegeleverde Node-server. De lokale bibliotheek en de online bibliotheek staan los van elkaar. Het kiezen van een andere uitvoering verplaatst of overschrijft geen bestanden.
+Er zijn twee uitvoeringen: online via Vercel en een eigen Convex-server op Appa, en lokaal via de meegeleverde Node-server. De lokale bibliotheek en de online bibliotheek staan los van elkaar. Het kiezen van een andere uitvoering verplaatst of overschrijft geen bestanden.
 
 ## Online gebruiken
 
@@ -86,11 +86,11 @@ Als de tablet de verbinding verliest, blijft het huidige fragment op de pc doors
 
 - Ondersteunde bestandstypen zijn MP3, WAV, OGG, M4A en FLAC, tot maximaal 500 MB per bestand. De gebruikte browser moet de codec in het bestand kunnen afspelen; de bestandsextensie alleen garandeert dit niet.
 - Bij lokaal gebruik staan uploads in `data/audio/`, de bibliotheek in `data/library.json` en de koppelcode in `data/settings.json`.
-- Online staan bestanden in Convex File Storage en de bibliotheek, afspeellijst en afspeelstatus in Convex. Elke accountbibliotheek bevat maximaal 1000 bestanden. Uploads gaan rechtstreeks naar Convex en hoeven niet door een Vercel Function.
+- Online staan bestanden, accounts, bibliotheek, afspeellijst en afspeelstatus op de eigen Convex-server op Appa. Elke accountbibliotheek bevat maximaal 1000 bestanden. Uploads gaan rechtstreeks naar Appa en hoeven niet door een Vercel Function. Appa moet aanstaan en internet hebben om de online app te gebruiken.
 - Beide bibliotheken blijven bestaan wanneer je de app afsluit of de pc opnieuw opstart. Ze worden niet automatisch onderling gesynchroniseerd. Wil je lokale bestanden online gebruiken, upload dan de gewenste bestanden via de online afspeler.
 - Bestaande fragmenten zonder categorie blijven bewaard en worden als muziek weergegeven.
 - Maak voor een lokale reservekopie een kopie van de map `data/` terwijl de app is afgesloten. Een lokale reservekopie bevat geen online gegevens; maak daarvoor een export van de juiste Convex-deployment inclusief bestandsopslag.
-- Alleen de lokale uitvoering houdt audio, instellingen en opdrachten volledig binnen je pc en lokale netwerk. Online gebruikt de app Vercel voor de interface en Convex voor aanmelden, opslag en communicatie.
+- Alleen de lokale uitvoering houdt audio, instellingen en opdrachten volledig binnen je pc en lokale netwerk. Online gebruikt de app Vercel voor de interface, Appa voor accounts, opslag en communicatie, en Tailscale Funnel voor de beveiligde verbinding met Appa. Alleen Google-aanmeldverzoeken lopen nog via het bestaande Convex Cloud-adres.
 
 Online kan iedere aangemelde gebruiker alleen zijn eigen bestanden uploaden, verwijderen en media-URL's ophalen. Gekoppelde tablets ontvangen de bestandsnamen en status van hun gekoppelde speler, geen media-URL's. Een gekopieerde directe Convex-media-URL blijft wel bruikbaar zonder opnieuw aanmelden totdat het bestand wordt verwijderd; deel die URL's dus alleen wanneer je ook het bestand wilt delen. Zie [Convex: bestanden aanbieden](https://docs.convex.dev/file-storage/serve-files).
 
@@ -162,7 +162,9 @@ Gebruik afzonderlijke Convex-deployments voor ontwikkeling en productie. Account
 | Waar | Variabele | Waarde of doel |
 | --- | --- | --- |
 | Vite/Vercel build | `VITE_APP_MODE` | `cloud` voor online; anders wordt de lokale interface gebruikt. |
-| Vite/Vercel build | `VITE_CONVEX_URL` | De HTTPS `.convex.cloud`-URL van de bijbehorende deployment. Dit is een openbaar adres, geen geheim. |
+| Vite/Vercel build | `VITE_CONVEX_URL` | Backendadres voor ontwikkeling of een eigen build. Dit is een openbaar adres, geen geheim. |
+| Vite/Vercel build | `VITE_CONVEX_BACKEND_URL` | Heeft voorrang op `VITE_CONVEX_URL`. `vercel.json` zet productie op `https://appa.tailf12edd.ts.net:10000`. |
+| Vite/Vercel build | `VITE_AUTH_STORAGE_NAMESPACE` | Bestaande naamruimte voor browseraanmeldingen. Productie houdt `https://dependable-lynx-178.eu-west-1.convex.cloud/play-audio/` zodat bestaande accounts, inclusief gasten, hun gekopieerde aanmeldsessie kunnen vernieuwen. Zonder override blijft de naamruimte het backendadres plus het app-pad. |
 | Vite/Vercel build | `APP_BASE_PATH` | `/play-audio`. |
 | Lokale Convex CLI | `CONVEX_DEPLOYMENT` | De geselecteerde ontwikkeldeployment; de CLI beheert dit doorgaans in `.env.local`. |
 | Convex | `OWNER_LOGIN` | `jelle`; gebruikersnaam van het bestaande, gesloten wachtwoordaccount. Google-gebruikers hebben afzonderlijke accounts. |
@@ -171,7 +173,10 @@ Gebruik afzonderlijke Convex-deployments voor ontwikkeling en productie. Account
 | Convex | `AUTH_GOOGLE_SECRET` | Bijbehorend geheim van de Google OAuth-client. Nooit een `VITE_`-variabele. |
 | Convex | `JWT_PRIVATE_KEY` | Geheime aanmeldsleutel, afzonderlijk genereren voor dev en productie. |
 | Convex | `JWKS` | De publieke verificatiesleutels die bij `JWT_PRIVATE_KEY` horen. |
-| Convex, automatisch | `CONVEX_SITE_URL` | Het `.convex.site`-adres; gebruikt door `convex/auth.config.ts`. |
+| Convex, automatisch | `CONVEX_SITE_URL` | Publiek adres van HTTP Actions en JWT-uitgever. Op Appa is dit `https://appa.tailf12edd.ts.net:10000/http`, ingesteld via de backendoptie `CONVEX_SITE_ORIGIN`. |
+| Convex | `CUSTOM_AUTH_SITE_URL` | Op Appa het bestaande Google-aanmeldadres `https://dependable-lynx-178.eu-west-1.convex.site`. De oude deployment stuurt alleen OAuth-aanmeldverzoeken door naar Appa. Zo blijft de geregistreerde Google-callback geldig. |
+| Zelfgehoste Convex CLI | `CONVEX_SELF_HOSTED_URL` | Voor Appa `https://appa.tailf12edd.ts.net:10000`; vervangt de cloudselectie bij beheer en deploys. |
+| Zelfgehoste Convex CLI | `CONVEX_SELF_HOSTED_ADMIN_KEY` | Geheime beheersleutel voor Appa. Alleen in een privébestand of beveiligde omgeving bewaren. |
 | Alleen een eventuele CI-deploy | `CONVEX_DEPLOY_KEY` | Geheime deploymentsleutel, nooit een `VITE_`-variabele of onderdeel van de browserbuild. |
 
 Bewaar secrets buiten Git. `.env*`, `.checks/` en `.vercel/` worden genegeerd. Publiceer de privésleutel, het wachtwoord, Google-clientgeheim en deploymenttokens niet in documentatie of buildlogs. Google-aanmelding is alleen geregistreerd wanneer zowel `AUTH_GOOGLE_ID` als `AUTH_GOOGLE_SECRET` in Convex zijn ingesteld. De openbare query `account:authMethods` geeft alleen aan welke aanmeldmethodes zijn geconfigureerd, zonder waarden prijs te geven.
@@ -208,9 +213,9 @@ Open `http://localhost:3000/play-audio/player`. Laat voor verdere backendwijzigi
 
 ### Productie op Vercel
 
-1. Stel `OWNER_LOGIN`, `SITE_URL`, `JWT_PRIVATE_KEY`, `JWKS`, `AUTH_GOOGLE_ID` en `AUTH_GOOGLE_SECRET` ook op de **productiedeployment** in. Gebruik bij Convex-omgevingscommando's `--prod`, bijvoorbeeld `npx.cmd convex env set OWNER_LOGIN jelle --prod` en `npx.cmd convex env set SITE_URL https://jellewijma.com/play-audio --prod`. Gebruik de productieclient van Google, met de productiecallback uit de Google-instructies hieronder. De Auth-installatiehulp ondersteunt eveneens `--prod`; ontwikkelsleutels worden niet automatisch overgenomen.
-2. Voer de controles hieronder uit en publiceer de backend met `npx.cmd convex deploy`. De CLI toont de deployment waarop de wijziging wordt toegepast.
-3. Configureer in het audio-project op Vercel de drie buildvariabelen: `VITE_APP_MODE=cloud`, `VITE_CONVEX_URL` met de productie-URL en `APP_BASE_PATH=/play-audio`. `vercel.json` gebruikt Vite, `npm run build` en uitvoermap `dist`. Werk bij een andere Convex-deployment ook de toegestane HTTPS/WSS-adressen in de Content Security Policy van `vercel.json` bij.
+1. Selecteer Appa met `CONVEX_SELF_HOSTED_URL` en `CONVEX_SELF_HOSTED_ADMIN_KEY` in een privéomgeving. Houd `OWNER_LOGIN`, `SITE_URL`, `JWT_PRIVATE_KEY`, `JWKS`, `AUTH_GOOGLE_ID` en `AUTH_GOOGLE_SECRET` op die backend ingericht. `SITE_URL` blijft `https://jellewijma.com/play-audio`. Genereer bij een migratie geen nieuwe aanmeldsleutels en importeer de volledige snapshot inclusief `users`, `auth*` en bestandsopslag, zodat account- en bestands-ID's behouden blijven.
+2. Voer de controles hieronder uit en publiceer de backend met `npx.cmd convex deploy` vanuit de zelfgehoste CLI-omgeving. Controleer vóór iedere wijziging het geselecteerde backendadres. `--prod` is voor Convex Cloud en vervangt de zelfgehoste selectie niet.
+3. `vercel.json` legt de publieke productieconfiguratie vast in het buildcommando: `VITE_APP_MODE=cloud`, `APP_BASE_PATH=/play-audio`, het Appa-backendadres en de bestaande browsernaamruimte voor aanmelding. De oudere Vercel-variabele `VITE_CONVEX_URL` wordt daardoor niet voor productie gebruikt. Lokale ontwikkeling blijft de eigen omgevingsvariabelen gebruiken. Werk bij een ander backendadres ook de toegestane HTTPS/WSS-adressen in de Content Security Policy van `vercel.json` bij.
 4. Bouw/publiceer het audio-project en controleer eerst zijn eigen Vercel-adres: aanmelden, meerdere uploads, muziek, effecten, tabletbediening en herladen met behoud van de afspeellijst. Productie en previews moeten bewust aan de juiste Convex-deployment gekoppeld zijn.
 5. De bestaande portfolio op `jellewijma.com` routeert uitsluitend `/play-audio` en `/play-audio/:path*` door naar het audio-project, met behoud van het voorvoegsel. DNS kan geen afzonderlijk URL-pad toewijzen. Laat de audio-app zijn eigen beveiligingsheaders leveren en controleer dat de portfolio-overige routes blijven werken. Zie [Vercel rewrites](https://vercel.com/docs/routing/rewrites).
 6. Controleer het hele gebruikspad opnieuw via `https://jellewijma.com/play-audio`, inclusief de directe `/player`- en `/control`-links, assets, aanmelding, upload en afspelen.
@@ -221,7 +226,7 @@ Gebruik een afzonderlijk Google Cloud-project met een OAuth-client van type **We
 
 De openbare homepage is `https://jellewijma.com/play-audio`; de privacy-URL voor Google Branding is `https://jellewijma.com/play-audio/privacy`. De privacypagina werkt zonder aanmelding en zonder Convex-verbinding, en is vanaf de homepage en het aanmeldscherm bereikbaar. Ze beschrijft de opgeslagen profiel- en audiogegevens, browseropslag, betrokken diensten en het contactadres voor verwijderingsverzoeken.
 
-De callback loopt rechtstreeks via Convex HTTP Actions. Vul bij **Authorized redirect URIs** exact het adres van de bijbehorende omgeving in:
+De callback loopt via Convex HTTP Actions. In productie blijft het bestaande Cloud-adres als doorstuuradres naar Appa in gebruik; accounts, sessies en OAuth-verificatie worden op Appa verwerkt. `CUSTOM_AUTH_SITE_URL` op Appa houdt de onderstaande geregistreerde productiecallback in gebruik. Vul bij **Authorized redirect URIs** exact het adres van de bijbehorende omgeving in:
 
 | Omgeving | Authorized redirect URI |
 | --- | --- |
@@ -230,7 +235,7 @@ De callback loopt rechtstreeks via Convex HTTP Actions. Vul bij **Authorized red
 
 Gebruik bij **Authorized JavaScript origins** de frontend-origin zonder pad: `https://jellewijma.com` voor productie en de gebruikte lokale origin voor ontwikkeling, bijvoorbeeld `http://localhost:3000` of `http://localhost:4173`. De `/play-audio`-prefix hoort niet in de Google-callback of JavaScript-origin. Zie [Convex Auth: Google configureren](https://labs.convex.dev/auth/config/oauth/google).
 
-Stel de client-ID in als `AUTH_GOOGLE_ID` en het clientgeheim als `AUTH_GOOGLE_SECRET` op de bijbehorende **Convex**-deployment in, via het dashboard of `convex env set --from-file` met een privébestand. Gebruik `--prod` voor de productieomgeving. Zet deze waarden niet in Vercel-buildvariabelen of frontendcode. De app vraagt uitsluitend `openid profile email` aan en toont de Google-accountkeuze. Alleen een geverifieerd e-mailadres wordt geaccepteerd; het onveranderlijke Google-accountnummer bepaalt bij volgende aanmeldingen welk app-account wordt gebruikt.
+Stel de client-ID in als `AUTH_GOOGLE_ID` en het clientgeheim als `AUTH_GOOGLE_SECRET` op de bijbehorende **Convex**-deployment in, via het dashboard of `convex env set --from-file` met een privébestand. Selecteer voor productie de zelfgehoste Appa-omgeving. Zet deze waarden niet in Vercel-buildvariabelen of frontendcode. De app vraagt uitsluitend `openid profile email` aan en toont de Google-accountkeuze. Alleen een geverifieerd e-mailadres wordt geaccepteerd; het onveranderlijke Google-accountnummer bepaalt bij volgende aanmeldingen welk app-account wordt gebruikt.
 
 Stel `SITE_URL` op het volledige frontend-adres inclusief het app-pad in: productie `https://jellewijma.com/play-audio`, ontwikkeling bijvoorbeeld `http://localhost:4173/play-audio`. De frontend geeft een **absolute** terugkeer-URL door, bijvoorbeeld `https://jellewijma.com/play-audio/player`. `convex/auth_policy.ts` staat uitsluitend de `/player`-pagina onder de geconfigureerde origin en het app-pad toe. Daardoor verdubbelt `/play-audio` niet en kan de aanmelding niet naar een andere website worden doorgestuurd. Test Google-aanmelding op dezelfde origin als `SITE_URL`; de hoofdsite en een losse Vercel-preview zijn verschillende origins.
 
@@ -240,9 +245,15 @@ Openbare wachtwoordregistratie en openbare wachtwoordreset zijn uitgeschakeld; G
 
 Voor herstel voert een Convex-beheerder de interne action `account:resetOwner` uit met hetzelfde argumentschema. Dat wijzigt het wachtwoord en trekt alle bestaande beheerderssessies in; bestanden en afspeellijst blijven behouden. Gebruik een uniek wachtwoord van 12 tot 200 tekens en voer het via een privé-invoermethode of de bevoegde Convex-dashboardinterface in. Zet het echte wachtwoord niet in een vast CLI-commando, shellgeschiedenis of Git-bestand. Controleer vóór uitvoering expliciet of dev of productie is geselecteerd. Voor een gewone wijziging gebruikt de eigenaar de wachtwoordfunctie in de app.
 
+## Appa beheren
+
+De online backend draait als gebruikersservice `play-audio-convex.service` op Appa, met een afzonderlijke HTTP-/WebSocket-gateway en dagelijkse back-ups. [ops/appa/README.md](ops/appa/README.md) beschrijft de geïnstalleerde paden, veilige statuscontroles, herstarten, de vastgezette backendversie, herstel vanuit een volledige snapshot en de nog te activeren Funnel-route. De bijbehorende niet-geheime configuratiebestanden staan in dezelfde map.
+
+De zeven dagelijkse snapshots staan op dezelfde schijf als de backend. Bewaar voor herstel na schijfverlies ook een beveiligde kopie buiten Appa, samen met de private deploymentconfiguratie.
+
 ## Opbouw voor ontwikkelaars
 
-Lokaal levert de Node-server de interface en audiobestanden vanaf hetzelfde adres. De tablet stuurt opdrachten via een WebSocket naar de actieve afspeler. Online levert Vercel de interface en verwerkt Convex de opslag, aanmelding, status en opdrachten. In beide uitvoeringen rapporteert de pc de werkelijke afspeelstatus; de pc blijft het apparaat dat audio produceert.
+Lokaal levert de Node-server de interface en audiobestanden vanaf hetzelfde adres. De tablet stuurt opdrachten via een WebSocket naar de actieve afspeler. Online levert Vercel de interface en verwerkt de eigen Convex-server op Appa de opslag, aanmelding, status en opdrachten. In beide uitvoeringen rapporteert de pc de werkelijke afspeelstatus; de pc blijft het apparaat dat audio produceert.
 
 | Onderdeel | Verantwoordelijkheid |
 | --- | --- |
