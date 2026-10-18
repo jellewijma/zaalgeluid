@@ -123,10 +123,10 @@ systemctl --user start play-audio-convex-backup.service
 
 ## Publieke Funnel-route
 
-De native backend en gateway zijn lokaal ingericht. De nieuwe publieke TLS-route op poort 10000 wacht nog op activering. Het benodigde commando op Appa is:
+De native backend, gateway en publieke TLS-route op poort 10000 zijn actief. Bij herstel op een nieuwe installatie activeer je die route met beheerdersrechten:
 
 ```bash
-tailscale funnel --bg --https=10000 http://127.0.0.1:3212
+sudo tailscale funnel --bg --https=10000 http://127.0.0.1:3212
 ```
 
 Dit voegt een afzonderlijke poort toe. Controleer daarna `tailscale funnel status` en `https://appa.tailf12edd.ts.net:10000/version`, en test de volledige browserroute. De bestaande routes op 443 en 8443 hoeven niet te worden gewijzigd.
