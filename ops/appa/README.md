@@ -130,3 +130,5 @@ sudo tailscale funnel --bg --https=10000 http://127.0.0.1:3212
 ```
 
 Dit voegt een afzonderlijke poort toe. Controleer daarna `tailscale funnel status` en `https://appa.tailf12edd.ts.net:10000/version`, en test de volledige browserroute. De bestaande routes op 443 en 8443 hoeven niet te worden gewijzigd.
+
+Op apparaten binnen hetzelfde Tailscale-netwerk verwijst MagicDNS dit adres rechtstreeks naar Appa. Chrome kan daarom voor `https://jellewijma.com` om lokale netwerktoegang vragen. Sta die toegang toe; als ze eerder is geweigerd, kies in de site-instellingen **Lokale netwerktoegang → Toestaan** en vernieuw de pagina. Buiten het Tailscale-netwerk gebruikt de browser de publieke Funnel-route. Zie [Chrome: lokale netwerktoegang](https://developer.chrome.com/blog/local-network-access).
